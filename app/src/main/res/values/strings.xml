@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">Eneverre</string>
+    <string name="prompt_email">Email</string>
+    <string name="prompt_password">Password</string>
+    <string name="action_sign_in_short">Sign in</string>
+    <string name="login_failed">"Login failed"</string>
+    <string name="loginLabel">Login</string>
+    <string name="passwordHint">Password</string>
+    <string name="usernameHint">Username</string>
+    <string name="serverHint">https://</string>
+    <string name="required_configuration">Required configuration</string>
+    <string name="live_view">Live view</string>
+    <string name="devices">Devices</string>
+    <string name="todo">TODO</string>
+    <string name="camera">Camera</string>
+    <string name="reconnect">Reconnect</string>
+    <string name="more_options">More options</string>
+    <string name="mute">Mute</string>
+    <string name="recalibrate_position">Recalibrate the position…</string>
+    <string name="cameras">Cameras</string>
+    <string name="exit_privacy_mode">Exit privacy mode</string>
+</resources>

@@ -1,0 +1,18 @@
+<menu
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/volume_action"
+        android:icon="@drawable/ic_volume_24"
+        android:title="@string/mute"
+        android:contentDescription="@string/todo"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/recalibrate_ptz"
+        android:title="@string/recalibrate_position"
+        android:contentDescription="@string/todo"
+        app:showAsAction="never" />
+
+</menu>
