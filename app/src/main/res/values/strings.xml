@@ -19,4 +19,5 @@
     <string name="recalibrate_position">Recalibrate the position…</string>
     <string name="cameras">Cameras</string>
     <string name="exit_privacy_mode">Exit privacy mode</string>
+    <string name="picture_in_picture">Picture in Picture</string>
 </resources>

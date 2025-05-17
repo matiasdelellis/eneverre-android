@@ -4,6 +4,7 @@ import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 import static android.widget.Toast.LENGTH_LONG;
 
+import android.app.PictureInPictureParams;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -13,12 +14,16 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.Rational;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import androidx.appcompat.app.ActionBar;
@@ -39,8 +44,8 @@ import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.util.Snapshot;
-import ar.com.delellis.eneverre.player.VlcPlayer;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
+import ar.com.delellis.eneverre.player.VlcPlayer;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -73,21 +78,8 @@ public class VideoActivity extends AppCompatActivity {
         Toolbar videoToolbar = (Toolbar) findViewById(R.id.video_toolbar);
         setSupportActionBar(videoToolbar);
 
-        FrameLayout frameLayout = findViewById(R.id.frameLayout);
         int orientation = getResources().getConfiguration().orientation;
-        if (orientation == Configuration.ORIENTATION_PORTRAIT) {
-            videoToolbar.setVisibility(VISIBLE);
-
-            int screenWidth = Resources.getSystem().getDisplayMetrics().widthPixels;
-            int videoWidth = currentCamera.getWidth();
-            int videoHeight = currentCamera.getHeight();
-            frameLayout.getLayoutParams().height = videoHeight * screenWidth / videoWidth;
-        }
-        else {
-            videoToolbar.setVisibility(GONE);
-
-            frameLayout.getLayoutParams().height = -1;
-        }
+        setOrientationLayout (orientation);
 
         vlcPlayer = VlcPlayer.getInstance(this);
         vlcPlayer.setEventListener(event -> {
@@ -214,6 +206,7 @@ public class VideoActivity extends AppCompatActivity {
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.video_top_app_bar, menu);
 
+        menu.findItem(R.id.pip_action).setVisible(!currentCamera.getPrivacy());
         menu.findItem(R.id.volume_action).setVisible(!currentCamera.getPrivacy());
         menu.findItem(R.id.recalibrate_ptz).setVisible(currentCamera.getPtz());
 
@@ -222,6 +215,7 @@ public class VideoActivity extends AppCompatActivity {
 
     @Override
     public boolean onPrepareOptionsMenu(Menu menu) {
+        menu.findItem(R.id.pip_action).setVisible(!currentCamera.getPrivacy());
         menu.findItem(R.id.volume_action).setVisible(!currentCamera.getPrivacy());
         if (currentCamera.getPtz()) {
             menu.findItem(R.id.recalibrate_ptz).setVisible(!currentCamera.getPrivacy());
@@ -233,7 +227,12 @@ public class VideoActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int itemId = item.getItemId();
-        if (itemId == R.id.volume_action) {
+        if (itemId == R.id.pip_action) {
+            Rational aspectRatio = new Rational(currentCamera.getWidth(), currentCamera.getHeight());
+            PictureInPictureParams pipParams = new PictureInPictureParams.Builder().setAspectRatio(aspectRatio).build();
+            enterPictureInPictureMode(pipParams);
+            return true;
+        } else if (itemId == R.id.volume_action) {
             if (vlcPlayer.isMuted()) {
                 vlcPlayer.mute(false);
                 item.setIcon(R.drawable.ic_volume_24);
@@ -248,6 +247,39 @@ public class VideoActivity extends AppCompatActivity {
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+
+        if (isInPictureInPictureMode())
+            return;
+
+        setOrientationLayout(newConfig.orientation);
+    }
+
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode);
+
+        if (isInPictureInPictureMode) {
+            findViewById(R.id.frameLayout).setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0.0F));
+
+            findViewById(R.id.video_toolbar).setVisibility(GONE);
+            if (currentCamera.getPtz()) {
+                findViewById(R.id.ptz_buttons).setVisibility(GONE);
+            }
+            findViewById(R.id.privacy_button).setVisibility(GONE);
+            findViewById(R.id.take_snapshot).setVisibility(GONE);
+        } else {
+            findViewById(R.id.video_toolbar).setVisibility(VISIBLE);
+            if (currentCamera.getPtz()) {
+                findViewById(R.id.ptz_buttons).setVisibility(VISIBLE);
+            }
+            findViewById(R.id.privacy_button).setVisibility(VISIBLE);
+            findViewById(R.id.take_snapshot).setVisibility(VISIBLE);
+        }
     }
 
     private void setVideoPrivacy(boolean privacy) {
@@ -269,6 +301,30 @@ public class VideoActivity extends AppCompatActivity {
 
         currentCamera.setPrivacy(privacy);
         invalidateOptionsMenu();
+    }
+
+    private void setOrientationLayout(int orientation) {
+        Toolbar videoToolbar = (Toolbar) findViewById(R.id.video_toolbar);
+        FrameLayout frameLayout = findViewById(R.id.frameLayout);
+        View ptzButtons = findViewById(R.id.ptz_buttons);
+
+        if (orientation == Configuration.ORIENTATION_PORTRAIT) {
+            videoToolbar.setVisibility(VISIBLE);
+            ptzButtons.setVisibility(currentCamera.getPtz() ? VISIBLE : GONE);
+
+            int screenWidth = Resources.getSystem().getDisplayMetrics().widthPixels;
+            int videoWidth = currentCamera.getWidth();
+            int videoHeight = currentCamera.getHeight();
+
+            frameLayout.getLayoutParams().width = screenWidth;
+            frameLayout.getLayoutParams().height = screenWidth * videoHeight / videoWidth;
+        }
+        else {
+            videoToolbar.setVisibility(GONE);
+            ptzButtons.setVisibility(GONE);
+
+            frameLayout.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0.0F));
+        }
     }
 
     private void takeSnapshot() {

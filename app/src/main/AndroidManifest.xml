@@ -24,7 +24,9 @@
             android:exported="false" />
         <activity
             android:name=".VideoActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:supportsPictureInPicture="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"/>
         <activity
             android:name=".SplashActivity"
             android:exported="true">
