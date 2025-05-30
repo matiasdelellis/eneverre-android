@@ -69,6 +69,13 @@ public class ApiClient {
         return this.protocol + this.baseUrl + "/api/";
     }
 
+    public String getPlaybackUrl(String device_id, String start, double duration) {
+        if (this.port > 0) {
+            return this.protocol + getCredentials() + "@" + this.baseUrl + ":" + this.port + "/api/camera/" + device_id + "/playback/get?start=" + start + "&duration=" + duration;
+        }
+        return this.protocol + getCredentials() + "@" + this.baseUrl + "/api/camera/" + device_id + "/playback/get?start=" + start + "&duration=" + duration;
+    }
+
     private String getCredentials() {
         return this.username + ":" + this.password;
     }

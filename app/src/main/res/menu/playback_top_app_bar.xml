@@ -1,0 +1,30 @@
+<menu
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/pause_action"
+        android:icon="@drawable/ic_pause_24"
+        android:title="@string/pause"
+        android:contentDescription="@string/todo"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/volume_action"
+        android:icon="@drawable/ic_volume_24"
+        android:title="@string/mute"
+        android:contentDescription="@string/todo"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/increase_scale_action"
+        android:title="@string/increase_scale"
+        android:contentDescription="@string/todo"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/decrease_scale_action"
+        android:title="@string/decrease_scale"
+        android:contentDescription="@string/todo"
+        app:showAsAction="never" />
+
+</menu>

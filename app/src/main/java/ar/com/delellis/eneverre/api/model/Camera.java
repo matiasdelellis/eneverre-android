@@ -23,6 +23,10 @@ public class Camera implements Serializable {
     private String live;
 
     @Expose
+    @SerializedName("playback")
+    private boolean playback;
+
+    @Expose
     @SerializedName("width")
     private int width;
 
@@ -52,6 +56,10 @@ public class Camera implements Serializable {
 
     public String getLive() {
         return live;
+    }
+
+    public boolean hasPlayback() {
+        return playback;
     }
 
     public int getWidth() {

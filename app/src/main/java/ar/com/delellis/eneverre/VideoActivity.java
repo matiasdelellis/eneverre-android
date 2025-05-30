@@ -39,10 +39,13 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.io.Serializable;
+import java.util.List;
 
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.Camera;
+import ar.com.delellis.eneverre.api.model.Recording;
 import ar.com.delellis.eneverre.util.Snapshot;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
 import ar.com.delellis.eneverre.player.VlcPlayer;
@@ -56,10 +59,14 @@ public class VideoActivity extends AppCompatActivity {
 
     private static final String TAG = "VideoActivity";
 
+    public static final String PLAYBACK_LIST_DATA = "PLAYBACK_LIST";
+
     private VlcPlayer vlcPlayer = null;
     private VLCVideoLayout vlcVideoLayout = null;
 
     private Camera currentCamera = null;
+
+    private List<Recording> recordings = null;
 
     private ApiClient apiClient = null;
     private ApiService apiService = null;
@@ -81,7 +88,7 @@ public class VideoActivity extends AppCompatActivity {
         int orientation = getResources().getConfiguration().orientation;
         setOrientationLayout (orientation);
 
-        vlcPlayer = VlcPlayer.getInstance(this);
+        vlcPlayer = new VlcPlayer(this);
         vlcPlayer.setEventListener(event -> {
             if (event.type == MediaPlayer.Event.Buffering) {
                 if (event.getBuffering() == 100f) {
@@ -97,6 +104,24 @@ public class VideoActivity extends AppCompatActivity {
 
         vlcVideoLayout = findViewById(R.id.vlc_video_Layout);
         vlcVideoLayout.setOnTouchListener(new VideoTouchListener(vlcVideoLayout));
+
+        findViewById(R.id.go_playback_button).setEnabled(false);
+        if (currentCamera.hasPlayback()) {
+            findViewById(R.id.go_playback_button).setVisibility(VISIBLE);
+            updatePlayback();
+        } else {
+            findViewById(R.id.go_playback_button).setVisibility(GONE);
+        }
+
+        findViewById(R.id.go_playback_button).setOnClickListener(v -> {
+            pausePlaying();
+
+            Log.i(TAG, "Go to playback view");
+            Intent goIntent = new Intent(VideoActivity.this, PlaybackActivity.class);
+            goIntent.putExtra(PLAYBACK_LIST_DATA, (Serializable) recordings);
+            goIntent.putExtra(CamerasActivity.CURRENT_CAMERA_DATA, (Serializable) currentCamera);
+            startActivity(goIntent);
+        });
 
         findViewById(R.id.reconnect_button).setVisibility(GONE);
         findViewById(R.id.reconnect_button).setOnClickListener(v -> {
@@ -164,6 +189,17 @@ public class VideoActivity extends AppCompatActivity {
             setVideoPrivacy(true);
         else
             startPlaying();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (currentCamera.getPrivacy())
+            return;
+
+        if (vlcPlayer.isPaused())
+            resumePlaying();
     }
 
     @Override
@@ -355,6 +391,16 @@ public class VideoActivity extends AppCompatActivity {
         vlcPlayer.playUri(Uri.parse(videoUrl));
     }
 
+    private void pausePlaying() {
+        Log.d(TAG, "Pause live stream");
+        vlcPlayer.pause();
+    }
+
+    private void resumePlaying() {
+        Log.d(TAG, "Resume live stream");
+        vlcPlayer.resume();
+    }
+
     private void stopPlaying() {
         vlcPlayer.stop();
 
@@ -372,6 +418,23 @@ public class VideoActivity extends AppCompatActivity {
         Canvas canvas = holder.lockCanvas();
         canvas.drawColor(Color.BLACK);
         holder.unlockCanvasAndPost(canvas);
+    }
+
+    private void updatePlayback () {
+        Call<List<Recording>> playbackCall = apiService.recordings(ApiClient.getInstance().getAuthorization(), currentCamera.getId());
+        playbackCall.enqueue(new Callback<List<Recording>>() {
+            @Override
+            public void onResponse(Call<List<Recording>> call, Response<List<Recording>> response) {
+                recordings = response.body();
+                Log.i(TAG, "Recording list size: " + recordings.size());
+                findViewById(R.id.go_playback_button).setEnabled(true);
+            }
+            @Override
+            public void onFailure(Call<List<Recording>> call, Throwable throwable) {
+                // TODO: Show dialog with message
+                Log.e(TAG, throwable.toString());
+            }
+        });
     }
 
     private static class VoidPtzCallback implements Callback<Void> {

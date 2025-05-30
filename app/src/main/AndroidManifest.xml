@@ -28,6 +28,10 @@
             android:supportsPictureInPicture="true"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"/>
         <activity
+            android:name=".PlaybackActivity"
+            android:exported="false"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"/>
+        <activity
             android:name=".SplashActivity"
             android:exported="true">
             <intent-filter>

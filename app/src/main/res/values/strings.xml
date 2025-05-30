@@ -20,4 +20,9 @@
     <string name="cameras">Cameras</string>
     <string name="exit_privacy_mode">Exit privacy mode</string>
     <string name="picture_in_picture">Picture in Picture</string>
+    <string name="playback">Playback</string>
+    <string name="pause">Pause</string>
+    <string name="increase_scale">Increase timeline</string>
+    <string name="decrease_scale">Decrease timeline</string>
+    <string name="reproduction_and_events">Reproduction and events</string>
 </resources>

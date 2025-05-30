@@ -77,6 +77,15 @@
 
         </FrameLayout>
 
+        <Button
+            android:id="@+id/go_playback_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            app:icon="@drawable/ic_replay_24"
+            android:text="@string/reproduction_and_events"
+            style="@style/Widget.MaterialComponents.Button.TextButton"/>
+
         <RelativeLayout
             android:id="@+id/ptz_buttons"
             android:layout_width="match_parent"

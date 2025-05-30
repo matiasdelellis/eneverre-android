@@ -3,6 +3,7 @@ package ar.com.delellis.eneverre.api;
 import java.util.List;
 
 import ar.com.delellis.eneverre.api.model.Camera;
+import ar.com.delellis.eneverre.api.model.Recording;
 import retrofit2.Call;
 import retrofit2.http.GET;
 import retrofit2.http.Header;
@@ -25,4 +26,7 @@ public interface ApiService {
 
     @POST("camera/{device_id}/privacy")
     Call<Void> privacy(@Header("Authorization") String authorization, @Path("device_id") String device_id, @Query("enable") boolean enable);
+
+    @GET("camera/{device_id}/playback/list")
+    Call<List<Recording>> recordings(@Header("Authorization") String authorization, @Path("device_id") String device_id);
 }

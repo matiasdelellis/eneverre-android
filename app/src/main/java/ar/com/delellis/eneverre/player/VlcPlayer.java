@@ -9,7 +9,6 @@ import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.util.VLCVideoLayout;
 
 public class VlcPlayer {
-    private static VlcPlayer vlcPlayer;
 
     private LibVLC libVlc = null;
     private MediaPlayer mediaPlayer = null;
@@ -17,22 +16,12 @@ public class VlcPlayer {
 
     private int volume = 100;
 
-    private VlcPlayer(Context context) {
+    public VlcPlayer(Context context) {
         libVlc = new LibVLC(context);
         mediaPlayer = new MediaPlayer(libVlc);
     }
 
-    public static VlcPlayer getInstance(Context context) {
-        if (vlcPlayer == null) {
-            vlcPlayer = new VlcPlayer(context);
-        }
-        return vlcPlayer;
-    }
-
     public void release() {
-        if(vlcPlayer == null)
-            return;
-
         if (currentMedia != null) {
             currentMedia.release();
             currentMedia = null;
@@ -40,13 +29,12 @@ public class VlcPlayer {
 
         mediaPlayer.detachViews();
         mediaPlayer.release();
-
-        vlcPlayer = null;
     }
 
     public void attachView(VLCVideoLayout videoLayout) {
         mediaPlayer.attachViews(videoLayout, null, false, false);
     }
+
     public void detachViews() {
         mediaPlayer.detachViews();
     }
@@ -56,7 +44,7 @@ public class VlcPlayer {
     }
 
     public void playUri(Uri uri) {
-        currentMedia = new Media(vlcPlayer.libVlc, uri);
+        currentMedia = new Media(libVlc, uri);
 
         currentMedia.setHWDecoderEnabled(false, false);
         mediaPlayer.setMedia(currentMedia);
@@ -71,6 +59,18 @@ public class VlcPlayer {
             currentMedia.release();
             currentMedia = null;
         }
+    }
+
+    public boolean isPaused () {
+        return !mediaPlayer.isPlaying();
+    }
+
+    public void pause () {
+        mediaPlayer.pause();
+    }
+
+    public void resume () {
+        mediaPlayer.play();
     }
 
     public boolean isMuted () {
