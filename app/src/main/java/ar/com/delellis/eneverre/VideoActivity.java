@@ -59,14 +59,10 @@ public class VideoActivity extends AppCompatActivity {
 
     private static final String TAG = "VideoActivity";
 
-    public static final String PLAYBACK_LIST_DATA = "PLAYBACK_LIST";
-
     private VlcPlayer vlcPlayer = null;
     private VLCVideoLayout vlcVideoLayout = null;
 
     private Camera currentCamera = null;
-
-    private List<Recording> recordings = null;
 
     private ApiClient apiClient = null;
     private ApiService apiService = null;
@@ -82,7 +78,7 @@ public class VideoActivity extends AppCompatActivity {
         apiClient = ApiClient.getInstance();
         apiService = ApiClient.getApiService();
 
-        Toolbar videoToolbar = (Toolbar) findViewById(R.id.video_toolbar);
+        Toolbar videoToolbar = findViewById(R.id.video_toolbar);
         setSupportActionBar(videoToolbar);
 
         int orientation = getResources().getConfiguration().orientation;
@@ -105,21 +101,13 @@ public class VideoActivity extends AppCompatActivity {
         vlcVideoLayout = findViewById(R.id.vlc_video_Layout);
         vlcVideoLayout.setOnTouchListener(new VideoTouchListener(vlcVideoLayout));
 
-        findViewById(R.id.go_playback_button).setEnabled(false);
-        if (currentCamera.hasPlayback()) {
-            findViewById(R.id.go_playback_button).setVisibility(VISIBLE);
-            updatePlayback();
-        } else {
-            findViewById(R.id.go_playback_button).setVisibility(GONE);
-        }
-
+        findViewById(R.id.go_playback_button).setVisibility(currentCamera.hasPlayback() ? VISIBLE : GONE);
         findViewById(R.id.go_playback_button).setOnClickListener(v -> {
             pausePlaying();
 
             Log.i(TAG, "Go to playback view");
             Intent goIntent = new Intent(VideoActivity.this, PlaybackActivity.class);
-            goIntent.putExtra(PLAYBACK_LIST_DATA, (Serializable) recordings);
-            goIntent.putExtra(CamerasActivity.CURRENT_CAMERA_DATA, (Serializable) currentCamera);
+            goIntent.putExtra(CamerasActivity.CURRENT_CAMERA_DATA, currentCamera);
             startActivity(goIntent);
         });
 
@@ -340,7 +328,7 @@ public class VideoActivity extends AppCompatActivity {
     }
 
     private void setOrientationLayout(int orientation) {
-        Toolbar videoToolbar = (Toolbar) findViewById(R.id.video_toolbar);
+        Toolbar videoToolbar = findViewById(R.id.video_toolbar);
         FrameLayout frameLayout = findViewById(R.id.frameLayout);
         View ptzButtons = findViewById(R.id.ptz_buttons);
 
@@ -418,23 +406,6 @@ public class VideoActivity extends AppCompatActivity {
         Canvas canvas = holder.lockCanvas();
         canvas.drawColor(Color.BLACK);
         holder.unlockCanvasAndPost(canvas);
-    }
-
-    private void updatePlayback () {
-        Call<List<Recording>> playbackCall = apiService.recordings(ApiClient.getInstance().getAuthorization(), currentCamera.getId());
-        playbackCall.enqueue(new Callback<List<Recording>>() {
-            @Override
-            public void onResponse(Call<List<Recording>> call, Response<List<Recording>> response) {
-                recordings = response.body();
-                Log.i(TAG, "Recording list size: " + recordings.size());
-                findViewById(R.id.go_playback_button).setEnabled(true);
-            }
-            @Override
-            public void onFailure(Call<List<Recording>> call, Throwable throwable) {
-                // TODO: Show dialog with message
-                Log.e(TAG, throwable.toString());
-            }
-        });
     }
 
     private static class VoidPtzCallback implements Callback<Void> {

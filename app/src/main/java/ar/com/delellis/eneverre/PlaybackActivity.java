@@ -10,6 +10,7 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -30,11 +31,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 import ar.com.delellis.eneverre.api.ApiClient;
+import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.Recording;
 import ar.com.delellis.eneverre.player.VlcPlayer;
 import ar.com.delellis.eneverre.util.Time;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 import com.alexvas.widget.TimelineView.TimeRecord;
 
@@ -49,6 +54,8 @@ public class PlaybackActivity extends AppCompatActivity {
 
     private Camera currentCamera = null;
 
+    private List<Recording> recordings = null;
+
     private long lastTimeSelected = 0L;
     private long lastLength = 0L;
     private boolean timelineSelecting = false;
@@ -61,26 +68,8 @@ public class PlaybackActivity extends AppCompatActivity {
 
         Intent intent = getIntent();
         currentCamera = (Camera) intent.getSerializableExtra(CamerasActivity.CURRENT_CAMERA_DATA);
-        List<Recording> recordings = (List<Recording>) intent.getSerializableExtra(VideoActivity.PLAYBACK_LIST_DATA);
 
-        TimeRecord timeRecord = null;
-        ArrayList<TimeRecord> recordsBackgroundEvents = new ArrayList<TimeRecord>();
-        for (Recording recording: recordings) {
-            long startMs = Time.RFC3339toMS(recording.getStart());
-            long durationMs = (long) (recording.getDuration() * 1000L);
-            timeRecord = new TimeRecord(startMs, durationMs, recording);
-            recordsBackgroundEvents.add(timeRecord);
-        }
-
-        // Fake events to test the widget
-        ArrayList<TimeRecord> recordsMajor1Events = new ArrayList<TimeRecord>();
-        for (Recording recording: recordings) {
-            long startMs = Time.RFC3339toMS(recording.getStart());
-            timeRecord = new TimeRecord(startMs, 60*1000L, recording);
-            recordsMajor1Events.add(timeRecord);
-        }
-
-        Toolbar videoToolbar = (Toolbar) findViewById(R.id.playback_toolbar);
+        Toolbar videoToolbar = findViewById(R.id.playback_toolbar);
         setSupportActionBar(videoToolbar);
 
         int orientation = getResources().getConfiguration().orientation;
@@ -88,9 +77,6 @@ public class PlaybackActivity extends AppCompatActivity {
 
         timelineView = findViewById(R.id.timeline_view);
         timelineView.setInterval(INTERVAL_HOUR_6);
-
-        timelineView.setBackgroundRecords(recordsBackgroundEvents);
-        timelineView.setMajor1Records(recordsMajor1Events);
 
         vlcVideoLayout = findViewById(R.id.vlc_playback_layout);
         vlcVideoLayout.setOnTouchListener(new VideoTouchListener(vlcVideoLayout));
@@ -150,7 +136,8 @@ public class PlaybackActivity extends AppCompatActivity {
             }
         });
 
-        timelineView.setCurrentWithAnimation(System.currentTimeMillis() - 5*1000L);
+        timelineView.setVisibility(GONE);
+        updateRecordings();
     }
 
     @Override
@@ -236,7 +223,7 @@ public class PlaybackActivity extends AppCompatActivity {
     }
 
     private void setOrientationLayout(int orientation) {
-        Toolbar videoToolbar = (Toolbar) findViewById(R.id.playback_toolbar);
+        Toolbar videoToolbar = findViewById(R.id.playback_toolbar);
         FrameLayout frameLayout = findViewById(R.id.frameLayout);
         TimelineView timelineView = findViewById(R.id.timeline_view);
 
@@ -263,5 +250,48 @@ public class PlaybackActivity extends AppCompatActivity {
         String playbackUrl = ApiClient.getInstance().getPlaybackUrl(currentCamera.getId(), startTime, duration);
 
         vlcPlayer.playUri(Uri.parse(playbackUrl));
+    }
+
+    private void updateRecordings () {
+        ApiClient apiClient = ApiClient.getInstance();
+        ApiService apiService = ApiClient.getApiService();
+
+        Call<List<Recording>> playbackCall = apiService.recordings(apiClient.getAuthorization(), currentCamera.getId());
+        playbackCall.enqueue(new Callback<List<Recording>>() {
+            @Override
+            public void onResponse(Call<List<Recording>> call, Response<List<Recording>> response) {
+                recordings = response.body();
+
+                Log.i(TAG, "Recording list size: " + recordings.size());
+
+                TimeRecord timeRecord;
+                ArrayList<TimeRecord> recordsBackgroundEvents = new ArrayList<TimeRecord>();
+                for (Recording recording: recordings) {
+                    long startMs = Time.RFC3339toMS(recording.getStart());
+                    long durationMs = (long) (recording.getDuration() * 1000L);
+                    timeRecord = new TimeRecord(startMs, durationMs, recording);
+                    recordsBackgroundEvents.add(timeRecord);
+                }
+
+                // Fake events to test the widget
+                ArrayList<TimeRecord> recordsMajor1Events = new ArrayList<TimeRecord>();
+                for (Recording recording: recordings) {
+                    long startMs = Time.RFC3339toMS(recording.getStart());
+                    timeRecord = new TimeRecord(startMs, 60*1000L, recording);
+                    recordsMajor1Events.add(timeRecord);
+                }
+
+                timelineView.setBackgroundRecords(recordsBackgroundEvents);
+                timelineView.setMajor1Records(recordsMajor1Events);
+
+                timelineView.setCurrent(System.currentTimeMillis() - 5*1000L);
+                timelineView.setVisibility(VISIBLE);
+            }
+            @Override
+            public void onFailure(Call<List<Recording>> call, Throwable throwable) {
+                // TODO: Show dialog with message
+                Log.e(TAG, throwable.toString());
+            }
+        });
     }
 }
