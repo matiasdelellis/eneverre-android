@@ -2,7 +2,7 @@
 
 This is an Android client for [neverre-api](https://github.com/matiasdelellis/eneverre-api). 😄
 
-This project is intended solely to display streams from different manufacturers in a single application.
+These projects just attempt to consolidate the streams from different manufacturers into a single application.
 
 ### Features 🎉
 * Manufacturer independence: See [eneverre-api](https://github.com/matiasdelellis/eneverre-api) for details.
@@ -40,6 +40,6 @@ I hope you like it... 😃
 
 ### Screenshots 😍
 
-Cameras View | Fixed Camera | PTZ Camera | Private Camera
--- | -- | -- | -- 
-![](https://github.com/user-attachments/assets/36dae995-21a4-4d9e-8c3e-16aed99bdfda) | ![](https://github.com/user-attachments/assets/9d2dd21a-28e9-4e1f-80ed-5b723fae58b8) | ![](https://github.com/user-attachments/assets/7d6b5c89-ae4e-4424-8465-8b82ecfa87c1) | ![](https://github.com/user-attachments/assets/d6210614-85c7-459d-985a-bf01fa13d6e8)
+Cameras View | Fixed Camera | Playback | PTZ Camera | Private Camera
+-- | -- | -- | -- | --
+![](https://github.com/user-attachments/assets/36dae995-21a4-4d9e-8c3e-16aed99bdfda) | ![](https://github.com/user-attachments/assets/9d2dd21a-28e9-4e1f-80ed-5b723fae58b8) | ![](https://github.com/user-attachments/assets/b720f9b7-8329-4567-b928-3b525dc31863) | ![](https://github.com/user-attachments/assets/7d6b5c89-ae4e-4424-8465-8b82ecfa87c1) | ![](https://github.com/user-attachments/assets/d6210614-85c7-459d-985a-bf01fa13d6e8)
