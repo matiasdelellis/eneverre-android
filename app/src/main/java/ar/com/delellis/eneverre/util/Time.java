@@ -11,7 +11,7 @@ public class Time {
         try {
             date = timeServerFormatter.parse(dateTime);
         } catch (ParseException e) {
-            throw new RuntimeException(e);
+            return -1;
         }
         timeServerFormatter.format(date);
 
@@ -20,6 +20,11 @@ public class Time {
 
     public static String MStoRFC3339(long time) {
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX");
+        return simpleDateFormat.format(new Date(time));
+    }
+
+    public static String MStoFriendlyURL(long time) {
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
         return simpleDateFormat.format(new Date(time));
     }
 }

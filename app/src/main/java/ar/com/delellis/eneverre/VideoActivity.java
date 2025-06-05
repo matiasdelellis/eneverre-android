@@ -39,14 +39,13 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
-import java.io.Serializable;
-import java.util.List;
 
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.Camera;
-import ar.com.delellis.eneverre.api.model.Recording;
+import ar.com.delellis.eneverre.util.Download;
 import ar.com.delellis.eneverre.util.Snapshot;
+import ar.com.delellis.eneverre.util.Time;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
 import ar.com.delellis.eneverre.player.VlcPlayer;
 
@@ -356,19 +355,18 @@ public class VideoActivity extends AppCompatActivity {
         Snapshot.getSurfaceBitmap(surfaceView, new Snapshot.PixelCopyListener() {
             @Override
             public void onSurfaceBitmapReady(Bitmap bitmap) {
-                File snapshotFile = Snapshot.getSnapshotFile(currentCamera.getName());
+                File snapshotFile = Download.getDownloadFile(currentCamera.getName(), Time.MStoFriendlyURL(System.currentTimeMillis()), "png");
                 try {
                     OutputStream out = new BufferedOutputStream(new FileOutputStream(snapshotFile));
                     bitmap.compress(Bitmap.CompressFormat.PNG, 0, out);
-                    Snapshot.shareImage(VideoActivity.this, Uri.parse(snapshotFile.getPath()), currentCamera.getName());
+                    Download.share(VideoActivity.this, Uri.parse(snapshotFile.getPath()), currentCamera.getName(), "image/png");
                 } catch (FileNotFoundException e) {
-                    e.printStackTrace();
-                    throw new RuntimeException(e);
+                    Toast.makeText(VideoActivity.this, R.string.error_snapshot, LENGTH_LONG).show();
                 }
             }
             @Override
-            public void onSurfaceBitmapError(String errorMsg) {
-                Toast.makeText(VideoActivity.this, errorMsg, LENGTH_LONG).show();
+            public void onSurfaceBitmapError(int errorCode) {
+                Toast.makeText(VideoActivity.this, R.string.error_snapshot, LENGTH_LONG).show();
             }
         });
     }

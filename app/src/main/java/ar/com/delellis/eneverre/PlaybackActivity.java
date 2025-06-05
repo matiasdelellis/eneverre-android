@@ -2,6 +2,7 @@ package ar.com.delellis.eneverre;
 
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
+import static android.widget.Toast.LENGTH_LONG;
 
 import static com.alexvas.widget.TimelineView.INTERVAL_HOUR_6;
 
@@ -17,6 +18,7 @@ import android.view.MenuItem;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -27,6 +29,8 @@ import com.alexvas.widget.TimelineView;
 import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.util.VLCVideoLayout;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,8 +39,10 @@ import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.Recording;
 import ar.com.delellis.eneverre.player.VlcPlayer;
+import ar.com.delellis.eneverre.util.Download;
 import ar.com.delellis.eneverre.util.Time;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
+import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -205,6 +211,14 @@ public class PlaybackActivity extends AppCompatActivity {
                 item.setIcon(R.drawable.ic_play_24);
             }
             return true;
+        } else if (itemId == R.id.download) {
+            if (!vlcPlayer.isPaused()) {
+                vlcPlayer.pause();
+                item.setIcon(R.drawable.ic_play_24);
+            }
+            Toast.makeText(getApplicationContext(), R.string.downloading, Toast.LENGTH_SHORT).show();
+            downloadPlayback();
+            return true;
         } else if (itemId == R.id.increase_scale_action) {
             timelineView.increaseIntervalWithAnimation();
             return true;
@@ -250,6 +264,36 @@ public class PlaybackActivity extends AppCompatActivity {
         String playbackUrl = ApiClient.getInstance().getPlaybackUrl(currentCamera.getId(), startTime, duration);
 
         vlcPlayer.playUri(Uri.parse(playbackUrl));
+    }
+
+    private void downloadPlayback() {
+        ApiClient apiClient = ApiClient.getInstance();
+        ApiService apiService = ApiClient.getApiService();
+
+        String start = Time.MStoRFC3339(timelineView.getCurrent());
+
+        Call<ResponseBody> recordingCall = apiService.recording(apiClient.getAuthorization(), currentCamera.getId(), start, 30.0);
+        recordingCall.enqueue(new Callback<ResponseBody>() {
+            @Override
+            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                if (!response.isSuccessful())
+                    return;
+
+                String dateTime = Time.MStoFriendlyURL(timelineView.getCurrent());
+                File downloadFile = Download.getDownloadFile(currentCamera.getId(), dateTime,"mp4");
+                try {
+                    Download.writeFile(response.body().bytes(), downloadFile);
+                    Download.share(PlaybackActivity.this, Uri.parse(downloadFile.getPath()), currentCamera.getName(), "video/mp4");
+                } catch (IOException e) {
+                    Toast.makeText(PlaybackActivity.this, R.string.error_download, LENGTH_LONG).show();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ResponseBody> call, Throwable throwable) {
+                Toast.makeText(PlaybackActivity.this, R.string.error_download, LENGTH_LONG).show();
+            }
+        });
     }
 
     private void updateRecordings () {

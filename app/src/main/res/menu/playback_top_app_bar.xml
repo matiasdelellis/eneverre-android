@@ -17,6 +17,12 @@
         app:showAsAction="ifRoom" />
 
     <item
+        android:id="@+id/download"
+        android:title="@string/download_30_seconds"
+        android:contentDescription="@string/todo"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/increase_scale_action"
         android:title="@string/increase_scale"
         android:contentDescription="@string/todo"

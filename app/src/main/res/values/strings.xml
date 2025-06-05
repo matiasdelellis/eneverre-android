@@ -25,4 +25,8 @@
     <string name="increase_scale">Increase timeline</string>
     <string name="decrease_scale">Decrease timeline</string>
     <string name="reproduction_and_events">Reproduction and events</string>
+    <string name="download_30_seconds">Download 30 seconds</string>
+    <string name="downloading">Downloading...</string>
+    <string name="error_download">Failed to download the playback</string>
+    <string name="error_snapshot">Failed to take camera snapshot</string>
 </resources>
