@@ -21,10 +21,9 @@
 
         <ImageView
             android:id="@+id/camera_image"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
             android:contentDescription="@string/todo"
-            android:padding="5dp"
             android:src="@drawable/ic_image_24"/>
 
         <TextView
@@ -39,7 +38,8 @@
             android:textSize="18sp"
             android:singleLine="true"
             android:textStyle="bold"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginStart="2dp"
             tools:text="@tools:sample/lorem/random" />
 
         <TextView
@@ -53,6 +53,7 @@
             android:maxLines="1"
             android:singleLine="true"
             android:textColor="@android:color/darker_gray"
+            android:layout_marginStart="2dp"
             tools:text="@tools:sample/lorem/random" />
     </LinearLayout>
 

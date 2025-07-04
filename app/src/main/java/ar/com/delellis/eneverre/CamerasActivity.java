@@ -8,6 +8,7 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.util.Collections;
 import java.util.List;
 
 import ar.com.delellis.eneverre.api.model.Camera;
@@ -34,6 +35,9 @@ public class CamerasActivity extends AppCompatActivity {
 
         Intent intent = getIntent();
         cameraList = (List<Camera>) intent.getSerializableExtra(CAMERAS_LIST_DATA);
+        Collections.sort(cameraList, (o1, o2) ->
+                o1.getName().compareToIgnoreCase(o2.getName())
+        );
 
         RecyclerView recyclerView = findViewById(R.id.camera_list_view);
 

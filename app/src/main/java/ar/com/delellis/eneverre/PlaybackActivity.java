@@ -142,8 +142,9 @@ public class PlaybackActivity extends AppCompatActivity {
             }
         });
 
-        timelineView.setVisibility(GONE);
-        updateRecordings();
+        findViewById(R.id.timeline_frame).setVisibility(GONE);
+
+        initializeRecordings();
     }
 
     @Override
@@ -216,8 +217,9 @@ public class PlaybackActivity extends AppCompatActivity {
                 vlcPlayer.pause();
                 item.setIcon(R.drawable.ic_play_24);
             }
-            Toast.makeText(getApplicationContext(), R.string.downloading, Toast.LENGTH_SHORT).show();
-            downloadPlayback();
+            Toast.makeText(getApplicationContext(), R.string.downloading, LENGTH_LONG).show();
+            String start = Time.MStoRFC3339(timelineView.getCurrent());
+            downloadPlayback(start, 30.0);
             return true;
         } else if (itemId == R.id.increase_scale_action) {
             timelineView.increaseIntervalWithAnimation();
@@ -239,11 +241,11 @@ public class PlaybackActivity extends AppCompatActivity {
     private void setOrientationLayout(int orientation) {
         Toolbar videoToolbar = findViewById(R.id.playback_toolbar);
         FrameLayout frameLayout = findViewById(R.id.frameLayout);
-        TimelineView timelineView = findViewById(R.id.timeline_view);
+        FrameLayout timelineFrame = findViewById(R.id.timeline_frame);
 
         if (orientation == Configuration.ORIENTATION_PORTRAIT) {
             videoToolbar.setVisibility(VISIBLE);
-            timelineView.setVisibility(VISIBLE);
+            timelineFrame.setVisibility(VISIBLE);
 
             int screenWidth = Resources.getSystem().getDisplayMetrics().widthPixels;
             int videoWidth = currentCamera.getWidth();
@@ -254,30 +256,30 @@ public class PlaybackActivity extends AppCompatActivity {
         }
         else {
             videoToolbar.setVisibility(GONE);
-            timelineView.setVisibility(GONE);
+            timelineFrame.setVisibility(GONE);
 
             frameLayout.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0.0F));
         }
     }
 
-    private void startPlayback(String startTime, double duration) {
-        String playbackUrl = ApiClient.getInstance().getPlaybackUrl(currentCamera.getId(), startTime, duration);
+    private void startPlayback(String startRFC333, double duration) {
+        String playbackUrl = ApiClient.getInstance().getPlaybackUrl(currentCamera.getId(), startRFC333, duration);
 
         vlcPlayer.playUri(Uri.parse(playbackUrl));
     }
 
-    private void downloadPlayback() {
+    private void downloadPlayback(String startRFC333, double duration) {
         ApiClient apiClient = ApiClient.getInstance();
         ApiService apiService = ApiClient.getApiService();
 
-        String start = Time.MStoRFC3339(timelineView.getCurrent());
-
-        Call<ResponseBody> recordingCall = apiService.recording(apiClient.getAuthorization(), currentCamera.getId(), start, 30.0);
+        Call<ResponseBody> recordingCall = apiService.recording(apiClient.getAuthorization(), currentCamera.getId(), startRFC333, duration);
         recordingCall.enqueue(new Callback<ResponseBody>() {
             @Override
             public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
-                if (!response.isSuccessful())
+                if (!response.isSuccessful()) {
+                    Toast.makeText(PlaybackActivity.this, R.string.error_download, LENGTH_LONG).show();
                     return;
+                }
 
                 String dateTime = Time.MStoFriendlyURL(timelineView.getCurrent());
                 File downloadFile = Download.getDownloadFile(currentCamera.getId(), dateTime,"mp4");
@@ -296,7 +298,7 @@ public class PlaybackActivity extends AppCompatActivity {
         });
     }
 
-    private void updateRecordings () {
+    private void initializeRecordings() {
         ApiClient apiClient = ApiClient.getInstance();
         ApiService apiService = ApiClient.getApiService();
 
@@ -328,12 +330,13 @@ public class PlaybackActivity extends AppCompatActivity {
                 timelineView.setBackgroundRecords(recordsBackgroundEvents);
                 timelineView.setMajor1Records(recordsMajor1Events);
 
+                findViewById(R.id.timeline_frame).setVisibility(VISIBLE);
+
                 timelineView.setCurrent(System.currentTimeMillis() - 5*1000L);
-                timelineView.setVisibility(VISIBLE);
             }
             @Override
             public void onFailure(Call<List<Recording>> call, Throwable throwable) {
-                // TODO: Show dialog with message
+                Toast.makeText(PlaybackActivity.this, R.string.error_get_recordings, LENGTH_LONG).show();
                 Log.e(TAG, throwable.toString());
             }
         });
