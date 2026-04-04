@@ -8,6 +8,8 @@ import org.videolan.libvlc.Media;
 import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.util.VLCVideoLayout;
 
+import java.util.ArrayList;
+
 public class VlcPlayer {
 
     private LibVLC libVlc = null;
@@ -17,7 +19,15 @@ public class VlcPlayer {
     private int volume = 100;
 
     public VlcPlayer(Context context) {
-        libVlc = new LibVLC(context);
+        ArrayList<String> options = new ArrayList<String>();
+//        options.add("--aout=opensles");
+//        options.add("--audio-time-stretch"); // time stretching
+//        options.add("-vvv"); // verbosity
+//        options.add("--aout=opensles");
+//        options.add("--avcodec-codec=h264");
+//        options.add("--file-logging");
+//        options.add("--logfile=vlc-log.txt");
+        libVlc = new LibVLC(context, options);
         mediaPlayer = new MediaPlayer(libVlc);
     }
 

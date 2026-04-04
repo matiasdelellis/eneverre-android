@@ -29,7 +29,7 @@ public interface ApiService {
     Call<Void> privacy(@Header("Authorization") String authorization, @Path("device_id") String device_id, @Query("enable") boolean enable);
 
     @GET("camera/{device_id}/playback/list")
-    Call<List<Recording>> recordings(@Header("Authorization") String authorization, @Path("device_id") String device_id);
+    Call<List<Recording>> recordings(@Header("Authorization") String authorization, @Path("device_id") String device_id, @Query("start") String start, @Query("end") String end);
 
     @GET("camera/{device_id}/playback/get")
     Call<ResponseBody> recording(@Header("Authorization") String authorization, @Path("device_id") String device_id, @Query("start") String start, @Query("duration") double duration);

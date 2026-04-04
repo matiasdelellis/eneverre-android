@@ -118,7 +118,10 @@ public class PlaybackActivity extends AppCompatActivity {
 
             @Override
             public void onTimeSelected(long l, @Nullable TimeRecord timeRecord) {
-                if (timeRecord == null) return;
+                if (timeRecord == null)  {
+                    Toast.makeText(PlaybackActivity.this, R.string.there_is_no_recording, LENGTH_LONG).show();
+                    return;
+                }
 
                 timelineSelecting = false;
                 lastTimeSelected = l;
@@ -302,7 +305,10 @@ public class PlaybackActivity extends AppCompatActivity {
         ApiClient apiClient = ApiClient.getInstance();
         ApiService apiService = ApiClient.getApiService();
 
-        Call<List<Recording>> playbackCall = apiService.recordings(apiClient.getAuthorization(), currentCamera.getId());
+        long now = System.currentTimeMillis();
+        long yesterday = now - (24 * 60 * 60 * 1000L);
+
+        Call<List<Recording>> playbackCall = apiService.recordings(apiClient.getAuthorization(), currentCamera.getId(), Time.MStoRFC3339(yesterday), Time.MStoRFC3339(now));
         playbackCall.enqueue(new Callback<List<Recording>>() {
             @Override
             public void onResponse(Call<List<Recording>> call, Response<List<Recording>> response) {
@@ -318,17 +324,17 @@ public class PlaybackActivity extends AppCompatActivity {
                     timeRecord = new TimeRecord(startMs, durationMs, recording);
                     recordsBackgroundEvents.add(timeRecord);
                 }
+                timelineView.setBackgroundRecords(recordsBackgroundEvents);
 
                 // Fake events to test the widget
-                ArrayList<TimeRecord> recordsMajor1Events = new ArrayList<TimeRecord>();
-                for (Recording recording: recordings) {
-                    long startMs = Time.RFC3339toMS(recording.getStart());
-                    timeRecord = new TimeRecord(startMs, 60*1000L, recording);
-                    recordsMajor1Events.add(timeRecord);
-                }
+//                ArrayList<TimeRecord> recordsMajor1Events = new ArrayList<TimeRecord>();
+//                for (Recording recording: recordings) {
+//                    long startMs = Time.RFC3339toMS(recording.getStart());
+//                    timeRecord = new TimeRecord(startMs, 60*1000L, recording);
+//                    recordsMajor1Events.add(timeRecord);
+//                }
 
-                timelineView.setBackgroundRecords(recordsBackgroundEvents);
-                timelineView.setMajor1Records(recordsMajor1Events);
+                //timelineView.setMajor1Records(recordsMajor1Events);
 
                 findViewById(R.id.timeline_frame).setVisibility(VISIBLE);
 
