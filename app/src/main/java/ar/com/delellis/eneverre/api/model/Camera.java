@@ -15,6 +15,10 @@ public class Camera implements Serializable {
     private String name;
 
     @Expose
+    @SerializedName("location")
+    private String location;
+
+    @Expose
     @SerializedName("comment")
     private String comment;
 
@@ -48,6 +52,10 @@ public class Camera implements Serializable {
 
     public String getName() {
         return name;
+    }
+
+    public String getLocation() {
+        return location;
     }
 
     public String getComment() {

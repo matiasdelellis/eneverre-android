@@ -41,6 +41,7 @@ public class CamerasAdapter extends RecyclerView.Adapter<CamerasAdapterHolder> i
 
         holder.setImage(ContextCompat.getDrawable(context, imageId));
         holder.setName(camera.getName());
+        holder.setLocation(camera.getLocation());
         holder.setComment(camera.getComment());
     }
 
