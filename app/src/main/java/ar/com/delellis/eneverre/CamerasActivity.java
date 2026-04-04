@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.Collections;
 import java.util.List;
 
+import ar.com.delellis.eneverre.adapter.CamerasAdapter;
 import ar.com.delellis.eneverre.api.model.Camera;
 
 public class CamerasActivity extends AppCompatActivity {

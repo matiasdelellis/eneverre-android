@@ -1,23 +1,23 @@
-package ar.com.delellis.eneverre;
+package ar.com.delellis.eneverre.adapter;
 
 import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageView;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
 
+import ar.com.delellis.eneverre.R;
+import ar.com.delellis.eneverre.adapter.ui.CamerasAdapterHolder;
 import ar.com.delellis.eneverre.api.model.Camera;
 
-public class CamerasAdapter extends RecyclerView.Adapter<CamerasAdapter.CamerasAdapterHolder> implements View.OnClickListener {
-    Context context = null;
+public class CamerasAdapter extends RecyclerView.Adapter<CamerasAdapterHolder> implements View.OnClickListener {
+    Context context;
     View.OnClickListener onClickListener = null;
-    List<Camera> cameraList = null;
+    List<Camera> cameraList;
 
     public CamerasAdapter(Context context, List<Camera> cameraList) {
         this.context = context;
@@ -38,9 +38,10 @@ public class CamerasAdapter extends RecyclerView.Adapter<CamerasAdapter.CamerasA
         Camera camera = cameraList.get(position);
 
         int imageId = camera.getPrivacy() ? R.drawable.ic_privacy_24 : R.drawable.ic_image_24;
-        holder.cameraImageView.setImageDrawable(ContextCompat.getDrawable(context, imageId));
-        holder.cameraNameView.setText(camera.getName());
-        holder.cameraCommentView.setText(camera.getComment());
+
+        holder.setImage(ContextCompat.getDrawable(context, imageId));
+        holder.setName(camera.getName());
+        holder.setComment(camera.getComment());
     }
 
     @Override
@@ -59,26 +60,13 @@ public class CamerasAdapter extends RecyclerView.Adapter<CamerasAdapter.CamerasA
         }
     }
 
-    public void updateCamera(String camaraId, Camera camera) {
+    public void updateCamera(String cameraId, Camera camera) {
         // Until now only can change the privacy of the camera... we sync it.
         for (Camera item: cameraList) {
-            if (item.getId().equals(camera.getId())) {
+            if (item.getId().equals(cameraId)) {
                 item.setPrivacy(camera.getPrivacy());
             }
         }
         notifyDataSetChanged();
-    }
-
-    public static class CamerasAdapterHolder extends RecyclerView.ViewHolder {
-        ImageView cameraImageView;
-        TextView cameraNameView, cameraCommentView;
-
-        public CamerasAdapterHolder(@NonNull View itemView) {
-            super(itemView);
-
-            cameraImageView = itemView.findViewById(R.id.camera_image);
-            cameraNameView = itemView.findViewById(R.id.camera_name);
-            cameraCommentView = itemView.findViewById(R.id.camera_comment);
-        }
     }
 }
