@@ -14,22 +14,21 @@ import ar.com.delellis.eneverre.R;
 import ar.com.delellis.eneverre.adapter.ui.CamerasAdapterHolder;
 import ar.com.delellis.eneverre.api.model.Camera;
 
-public class CamerasAdapter extends RecyclerView.Adapter<CamerasAdapterHolder> implements View.OnClickListener {
+public class CamerasAdapter extends RecyclerView.Adapter<CamerasAdapterHolder> {
     Context context;
-    View.OnClickListener onClickListener = null;
     List<Camera> cameraList;
+    private OnCameraClickListener listener;
 
-    public CamerasAdapter(Context context, List<Camera> cameraList) {
+    public CamerasAdapter(Context context, List<Camera> cameraList, OnCameraClickListener listener) {
         this.context = context;
         this.cameraList = cameraList;
+        this.listener = listener;
     }
 
     @Override
     public CamerasAdapterHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         LayoutInflater inflater = LayoutInflater.from(context);
         View view = inflater.inflate(R.layout.item_camera, parent, false);
-
-        view.setOnClickListener(this);
         return new CamerasAdapterHolder(view);
     }
 
@@ -42,22 +41,17 @@ public class CamerasAdapter extends RecyclerView.Adapter<CamerasAdapterHolder> i
         holder.setImage(ContextCompat.getDrawable(context, imageId));
         holder.setName(camera.getName());
         holder.setComment(camera.getComment());
+
+        holder.itemView.setOnClickListener(v -> {
+            if (listener != null) {
+                listener.onCameraClick(camera);
+            }
+        });
     }
 
     @Override
     public int getItemCount() {
         return cameraList.size();
-    }
-
-    public void setOnClickListener(View.OnClickListener onClickListener) {
-        this.onClickListener = onClickListener;
-    }
-
-    @Override
-    public void onClick(View view) {
-        if (onClickListener != null) {
-            onClickListener.onClick(view);
-        }
     }
 
     public void updateCamera(String cameraId, Camera camera) {

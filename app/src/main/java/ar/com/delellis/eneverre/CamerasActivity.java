@@ -2,6 +2,8 @@ package ar.com.delellis.eneverre;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -15,10 +17,11 @@ import java.util.List;
 import java.util.Map;
 
 import ar.com.delellis.eneverre.adapter.LocationsAdapter;
+import ar.com.delellis.eneverre.adapter.OnCameraClickListener;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.model.Location;
 
-public class CamerasActivity extends AppCompatActivity {
+public class CamerasActivity extends AppCompatActivity implements OnCameraClickListener {
     private static final String TAG = "CamerasActivity";
 
     private static final int INTENT_VISUALIZE = 100;
@@ -70,7 +73,7 @@ public class CamerasActivity extends AppCompatActivity {
         }
         RecyclerView recyclerView = findViewById(R.id.camera_list_view);
 
-        locationsAdapter = new LocationsAdapter(this, locationList);
+        locationsAdapter = new LocationsAdapter(this, locationList, this);
 
         // Fixme:
         /*locationsAdapter.setOnClickListener(view -> {
@@ -93,5 +96,12 @@ public class CamerasActivity extends AppCompatActivity {
             //Camera camera = (Camera) data.getSerializableExtra(CURRENT_CAMERA_DATA);
             //locationsAdapter.updateCamera(camera.getId(), camera);
         }
+    }
+
+    @Override
+    public void onCameraClick(Camera camera) {
+        Intent videoIntent = new Intent(CamerasActivity.this, VideoActivity.class);
+        videoIntent.putExtra(CURRENT_CAMERA_DATA, camera);
+        startActivityForResult(videoIntent, INTENT_VISUALIZE);
     }
 }
