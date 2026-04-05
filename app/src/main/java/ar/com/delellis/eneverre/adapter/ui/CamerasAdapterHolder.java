@@ -12,14 +12,13 @@ import ar.com.delellis.eneverre.R;
 
 public class CamerasAdapterHolder extends RecyclerView.ViewHolder {
     ImageView cameraImageView;
-    TextView cameraNameView, cameraLocationView, cameraCommentView;
+    TextView cameraNameView, cameraCommentView;
 
     public CamerasAdapterHolder(@NonNull View itemView) {
         super(itemView);
 
         cameraImageView = itemView.findViewById(R.id.camera_image);
         cameraNameView = itemView.findViewById(R.id.camera_name);
-        cameraLocationView = itemView.findViewById(R.id.camera_location);
         cameraCommentView = itemView.findViewById(R.id.camera_comment);
     }
 
@@ -29,10 +28,6 @@ public class CamerasAdapterHolder extends RecyclerView.ViewHolder {
 
     public void setName(String name)  {
         cameraNameView.setText(name);
-    }
-
-    public void setLocation(String location)  {
-        cameraLocationView.setText(location);
     }
 
     public void setComment(String comment)  {
