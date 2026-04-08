@@ -183,6 +183,16 @@ public class LiveViewActivity extends AppCompatActivity implements LiveViewFragm
         else {
             videoToolbar.setVisibility(GONE);
         }
+        // FIXME: There's always one live video, but perhaps others can be seen with gestures
+        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+            if (fragment instanceof LiveViewFragment) {
+                LiveViewFragment f = (LiveViewFragment) fragment;
+
+                if (f.getView() != null) {
+                    f.setOrientationLayout(orientation);
+                }
+            }
+        }
     }
 
     @Override

@@ -178,7 +178,7 @@ public class LiveViewFragment extends Fragment {
 
         prefs = AppPreferences.getInstance(requireContext());
 
-        applyPipModeLayout();
+        setPipModeLayout(false);
     }
 
     @Override
@@ -210,7 +210,7 @@ public class LiveViewFragment extends Fragment {
         }
     }
 
-    private void setOrientationLayout(int orientation) {
+    public void setOrientationLayout(int orientation) {
         FrameLayout frameLayout = fragmentView.findViewById(R.id.frameLayout);
         View ptzButtons = fragmentView.findViewById(R.id.ptz_buttons);
 
@@ -326,19 +326,18 @@ public class LiveViewFragment extends Fragment {
     }
 
     public void setPipModeLayout(boolean enabled) {
-        pipMode = enabled;
-        applyPipModeLayout();
-    }
-
-    private void applyPipModeLayout() {
-        if (pipMode) {
+        if (enabled) {
+            Log.e(TAG, "PIP ON");
             fragmentView.findViewById(R.id.frameLayout).setLayoutParams(
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0.0F)
             );
-            fragmentView.findViewById(R.id.ptz_buttons).setVisibility(GONE);
+            if (currentCamera.getPtz()) {
+                fragmentView.findViewById(R.id.ptz_buttons).setVisibility(GONE);
+            }
             fragmentView.findViewById(R.id.privacy_button).setVisibility(GONE);
             fragmentView.findViewById(R.id.take_snapshot).setVisibility(GONE);
         } else {
+            Log.e(TAG, "PIP OFF");
             if (currentCamera.getPtz()) {
                 fragmentView.findViewById(R.id.ptz_buttons).setVisibility(VISIBLE);
             }
