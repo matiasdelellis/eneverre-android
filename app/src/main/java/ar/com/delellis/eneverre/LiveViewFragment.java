@@ -4,6 +4,8 @@ import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 import static android.widget.Toast.LENGTH_LONG;
 
+import static ar.com.delellis.eneverre.PlaybackActivity.INTENT_PLAYBACK_VIEW;
+
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
@@ -41,6 +43,7 @@ import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.player.VlcPlayer;
+import ar.com.delellis.eneverre.util.AppPreferences;
 import ar.com.delellis.eneverre.util.Download;
 import ar.com.delellis.eneverre.util.Snapshot;
 import ar.com.delellis.eneverre.util.Time;
@@ -52,6 +55,7 @@ import retrofit2.Response;
 
 public class LiveViewFragment extends Fragment {
     private static final String TAG = "LiveViewFragment";
+
     private static final String ARG_CURRENT_CAMERA = "current_camera";
 
     private VlcPlayer vlcPlayer = null;
@@ -66,6 +70,8 @@ public class LiveViewFragment extends Fragment {
     private OnPrivacyChangeListener privacyListener;
 
     private boolean pipMode = false;
+
+    AppPreferences prefs = null;
 
     public LiveViewFragment() {
         // Required empty public constructor
@@ -114,28 +120,30 @@ public class LiveViewFragment extends Fragment {
 
         view.findViewById(R.id.go_playback_button).setVisibility(currentCamera.hasPlayback() ? VISIBLE : GONE);
         view.findViewById(R.id.go_playback_button).setOnClickListener(v -> {
-            Intent goIntent = new Intent(requireContext(), PlaybackActivity.class);
-            goIntent.putExtra(CamerasActivity.CURRENT_CAMERA_DATA, currentCamera);
-            startActivity(goIntent);
+            Intent goIntent = new Intent(requireActivity(), PlaybackActivity.class);
+            goIntent.putExtra(LiveViewActivity.CURRENT_CAMERA_DATA, currentCamera);
+            startActivityForResult(goIntent, INTENT_PLAYBACK_VIEW);
         });
 
         view.findViewById(R.id.reconnect_button).setVisibility(GONE);
         view.findViewById(R.id.reconnect_button).setOnClickListener(v -> {
-            startLive();
             view.findViewById(R.id.reconnect_button).setVisibility(GONE);
+            startLive();
         });
 
         view.findViewById(R.id.exit_privacy_button).setVisibility(GONE);
         view.findViewById(R.id.exit_privacy_button).setOnClickListener(v -> {
+            setVideoPrivacyLayout(false);
+
             prepareLive();
+            setMuteLive(prefs.isGlobalMute());
             startLive();
-            setVideoPrivacy(false);
         });
 
         view.findViewById(R.id.privacy_button).setVisibility(VISIBLE);
         view.findViewById(R.id.privacy_button).setOnClickListener(v -> {
+            setVideoPrivacyLayout(true);
             stopLive(true);
-            setVideoPrivacy(true);
         });
 
         view.findViewById(R.id.take_snapshot).setVisibility(VISIBLE);
@@ -168,16 +176,19 @@ public class LiveViewFragment extends Fragment {
             downCall.enqueue(new VoidPtzCallback());
         });
 
-        applyPipMode();
+        prefs = AppPreferences.getInstance(requireContext());
+
+        applyPipModeLayout();
     }
 
     @Override
     public void onResume() {
         super.onResume();
         if (currentCamera.getPrivacy())
-            setVideoPrivacy(true);
+            setVideoPrivacyLayout(true);
         else {
             prepareLive();
+            setMuteLive(prefs.isGlobalMute());
             startLive();
         }
     }
@@ -219,7 +230,7 @@ public class LiveViewFragment extends Fragment {
         }
     }
 
-    private void setVideoPrivacy(boolean privacy) {
+    private void setVideoPrivacyLayout(boolean privacy) {
         fragmentView.findViewById(R.id.take_snapshot).setEnabled(!privacy);
         fragmentView.findViewById(R.id.privacy_button).setEnabled(!privacy);
 
@@ -314,12 +325,12 @@ public class LiveViewFragment extends Fragment {
         }
     }
 
-    public void setPipMode(boolean enabled) {
+    public void setPipModeLayout(boolean enabled) {
         pipMode = enabled;
-        applyPipMode();
+        applyPipModeLayout();
     }
 
-    private void applyPipMode() {
+    private void applyPipModeLayout() {
         if (pipMode) {
             fragmentView.findViewById(R.id.frameLayout).setLayoutParams(
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0.0F)

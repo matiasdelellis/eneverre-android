@@ -39,6 +39,7 @@ import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.Recording;
 import ar.com.delellis.eneverre.player.VlcPlayer;
+import ar.com.delellis.eneverre.util.AppPreferences;
 import ar.com.delellis.eneverre.util.Download;
 import ar.com.delellis.eneverre.util.Time;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
@@ -50,6 +51,8 @@ import retrofit2.Response;
 import com.alexvas.widget.TimelineView.TimeRecord;
 
 public class PlaybackActivity extends AppCompatActivity {
+
+    public static final int INTENT_PLAYBACK_VIEW = 200;
 
     private static final String TAG = "PlaybackActivity";
 
@@ -66,6 +69,7 @@ public class PlaybackActivity extends AppCompatActivity {
     private long lastLength = 0L;
     private boolean timelineSelecting = false;
 
+    private AppPreferences prefs = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,7 +77,7 @@ public class PlaybackActivity extends AppCompatActivity {
         setContentView(R.layout.activity_playback);
 
         Intent intent = getIntent();
-        currentCamera = (Camera) intent.getSerializableExtra(CamerasActivity.CURRENT_CAMERA_DATA);
+        currentCamera = (Camera) intent.getSerializableExtra(LiveViewActivity.CURRENT_CAMERA_DATA);
 
         Toolbar videoToolbar = findViewById(R.id.playback_toolbar);
         setSupportActionBar(videoToolbar);
@@ -109,6 +113,11 @@ public class PlaybackActivity extends AppCompatActivity {
                 findViewById(R.id.loading_progress).setVisibility(GONE);
             }
         });
+
+        prefs = AppPreferences.getInstance(this);
+        if (prefs.isGlobalMute()) {
+            vlcPlayer.mute(true);
+        }
 
         timelineView.setOnTimelineListener(new TimelineView.OnTimelineListener() {
             @Override
@@ -175,13 +184,16 @@ public class PlaybackActivity extends AppCompatActivity {
 
     @Override
     public boolean onSupportNavigateUp() {
+        Intent intent = new Intent();
+        setResult(RESULT_OK, intent);
         finish();
-
         return true;
     }
 
     @Override
     public void onBackPressed() {
+        Intent intent = new Intent();
+        setResult(RESULT_OK, intent);
         finish();
 
         super.onBackPressed();
@@ -191,6 +203,9 @@ public class PlaybackActivity extends AppCompatActivity {
     public boolean onCreateOptionsMenu(Menu menu) {
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.playback_top_app_bar, menu);
+        if (prefs.isGlobalMute()) {
+            menu.findItem(R.id.volume_action).setIcon(R.drawable.ic_muted_24);
+        }
         return true;
     }
 
@@ -200,9 +215,11 @@ public class PlaybackActivity extends AppCompatActivity {
         if (itemId == R.id.volume_action) {
             if (vlcPlayer.isMuted()) {
                 vlcPlayer.mute(false);
+                prefs.setGlobalMute(false);
                 item.setIcon(R.drawable.ic_volume_24);
             } else {
                 vlcPlayer.mute(true);
+                prefs.setGlobalMute(true);
                 item.setIcon(R.drawable.ic_muted_24);
             }
             return true;

@@ -14,7 +14,6 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import java.io.Serializable;
 import java.util.List;
 
 import ar.com.delellis.eneverre.adapter.LocationsAdapter;
@@ -32,8 +31,6 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
     public static final String LOCATION_CAMERAS_DATA = "LOCATION_CAMERAS";
 
     public static final String SELECTED_CAMERA_DATA = "SELECTED_CAMERA";
-
-    public static final String CURRENT_CAMERA_DATA = "CURRENT_CAMERA";
 
     private Locations locations = null;
 

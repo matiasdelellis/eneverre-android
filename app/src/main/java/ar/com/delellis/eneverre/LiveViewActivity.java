@@ -26,13 +26,16 @@ import androidx.viewpager2.widget.ViewPager2;
 import ar.com.delellis.eneverre.adapter.CameraPagerAdapter;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.model.Location;
+import ar.com.delellis.eneverre.util.AppPreferences;
 
 public class LiveViewActivity extends AppCompatActivity implements LiveViewFragment.OnPrivacyChangeListener {
-
     private Location location;
     private Camera currentCamera;
 
-    boolean liveMuted = false;
+    private AppPreferences prefs = null;
+    private boolean liveMuted = false;
+
+    public static final String CURRENT_CAMERA_DATA = "CURRENT_CAMERA";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,6 +71,22 @@ public class LiveViewActivity extends AppCompatActivity implements LiveViewFragm
         viewPager.setAdapter(adapter);
         int cameraSelected = intent.getIntExtra(SELECTED_CAMERA_DATA, 0);
         viewPager.setCurrentItem(cameraSelected, false);
+
+        prefs = AppPreferences.getInstance(this);
+        liveMuted = prefs.isGlobalMute();
+        if (liveMuted) {
+            muteLive(liveMuted);
+        }
+    }
+
+    @Override
+    protected void onActivityResult (int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (liveMuted != prefs.isGlobalMute()) {
+            muteLive(!liveMuted);
+            invalidateOptionsMenu();
+        }
     }
 
     @Override
@@ -95,6 +114,10 @@ public class LiveViewActivity extends AppCompatActivity implements LiveViewFragm
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.video_top_app_bar, menu);
 
+        if (liveMuted) {
+            menu.findItem(R.id.volume_action).setIcon(R.drawable.ic_muted_24);
+        }
+
         menu.findItem(R.id.pip_action).setVisible(!currentCamera.getPrivacy());
         menu.findItem(R.id.volume_action).setVisible(!currentCamera.getPrivacy());
         menu.findItem(R.id.recalibrate_ptz).setVisible(currentCamera.getPtz());
@@ -106,8 +129,15 @@ public class LiveViewActivity extends AppCompatActivity implements LiveViewFragm
     public boolean onPrepareOptionsMenu(Menu menu) {
         menu.findItem(R.id.pip_action).setVisible(!currentCamera.getPrivacy());
         menu.findItem(R.id.volume_action).setVisible(!currentCamera.getPrivacy());
+
         if (currentCamera.getPtz()) {
             menu.findItem(R.id.recalibrate_ptz).setVisible(!currentCamera.getPrivacy());
+        }
+
+        if (liveMuted) {
+            menu.findItem(R.id.volume_action).setIcon(R.drawable.ic_muted_24);
+        } else {
+            menu.findItem(R.id.volume_action).setIcon(R.drawable.ic_volume_24);
         }
 
         return super.onPrepareOptionsMenu(menu);
@@ -166,7 +196,7 @@ public class LiveViewActivity extends AppCompatActivity implements LiveViewFragm
                 LiveViewFragment f = (LiveViewFragment) fragment;
 
                 if (f.getView() != null) {
-                    f.setPipMode(isInPictureInPictureMode);
+                    f.setPipModeLayout(isInPictureInPictureMode);
                 }
             }
         }
@@ -179,6 +209,8 @@ public class LiveViewActivity extends AppCompatActivity implements LiveViewFragm
                 ((LiveViewFragment) fragment).setMuteLive(muted);
             }
         }
+
+        prefs.setGlobalMute(muted);
         liveMuted = muted;
     }
 
