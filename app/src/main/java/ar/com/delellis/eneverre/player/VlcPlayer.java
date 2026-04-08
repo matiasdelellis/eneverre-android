@@ -20,13 +20,9 @@ public class VlcPlayer {
 
     public VlcPlayer(Context context) {
         ArrayList<String> options = new ArrayList<String>();
-//        options.add("--aout=opensles");
-//        options.add("--audio-time-stretch"); // time stretching
-//        options.add("-vvv"); // verbosity
-//        options.add("--aout=opensles");
-//        options.add("--avcodec-codec=h264");
-//        options.add("--file-logging");
-//        options.add("--logfile=vlc-log.txt");
+        options.add("--quiet");
+        options.add("--no-drop-late-frames");
+        options.add("--no-skip-frames");
         libVlc = new LibVLC(context, options);
         mediaPlayer = new MediaPlayer(libVlc);
     }
@@ -56,7 +52,7 @@ public class VlcPlayer {
     public void playUri(Uri uri) {
         currentMedia = new Media(libVlc, uri);
 
-        currentMedia.setHWDecoderEnabled(false, false);
+        currentMedia.setHWDecoderEnabled(true, false);
         mediaPlayer.setMedia(currentMedia);
         currentMedia.release();
 

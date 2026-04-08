@@ -8,20 +8,20 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
-import java.util.List;
 
 import ar.com.delellis.eneverre.R;
 import ar.com.delellis.eneverre.adapter.ui.CamerasAdapterHolder;
 import ar.com.delellis.eneverre.api.model.Camera;
+import ar.com.delellis.eneverre.model.Cameras;
 
 public class CamerasAdapter extends RecyclerView.Adapter<CamerasAdapterHolder> {
     Context context;
-    List<Camera> cameraList;
+    Cameras cameras;
     private OnCameraClickListener listener;
 
-    public CamerasAdapter(Context context, List<Camera> cameraList, OnCameraClickListener listener) {
+    public CamerasAdapter(Context context, Cameras cameras, OnCameraClickListener listener) {
         this.context = context;
-        this.cameraList = cameraList;
+        this.cameras = cameras;
         this.listener = listener;
     }
 
@@ -34,7 +34,7 @@ public class CamerasAdapter extends RecyclerView.Adapter<CamerasAdapterHolder> {
 
     @Override
     public void onBindViewHolder(@NonNull CamerasAdapterHolder holder, int position) {
-        Camera camera = cameraList.get(position);
+        Camera camera = cameras.get(position);
 
         int imageId = camera.getPrivacy() ? R.drawable.ic_privacy_24 : R.drawable.ic_image_24;
 
@@ -44,23 +44,18 @@ public class CamerasAdapter extends RecyclerView.Adapter<CamerasAdapterHolder> {
 
         holder.itemView.setOnClickListener(v -> {
             if (listener != null) {
-                listener.onCameraClick(camera);
+                listener.onCameraClick(camera, position);
             }
         });
     }
 
     @Override
     public int getItemCount() {
-        return cameraList.size();
+        return cameras.count();
     }
 
-    public void updateCamera(String cameraId, Camera camera) {
-        // Until now only can change the privacy of the camera... we sync it.
-        for (Camera item: cameraList) {
-            if (item.getId().equals(cameraId)) {
-                item.setPrivacy(camera.getPrivacy());
-            }
-        }
+    public void updateCameras(Cameras newCameras) {
+        cameras = newCameras;
         notifyDataSetChanged();
     }
 }

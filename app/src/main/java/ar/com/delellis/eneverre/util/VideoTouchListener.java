@@ -31,6 +31,8 @@ public class VideoTouchListener implements View.OnTouchListener {
     @Override
     @SuppressLint("ClickableViewAccessibility")
     public boolean onTouch(View v, MotionEvent event) {
+        v.getParent().requestDisallowInterceptTouchEvent(true);
+
         switch (event.getAction() & MotionEvent.ACTION_MASK) {
             case MotionEvent.ACTION_DOWN:
                 lastEvent.set(event.getRawX(), event.getRawY());

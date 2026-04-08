@@ -111,7 +111,7 @@ public class LoginActivity extends AppCompatActivity {
 
                 Log.i(TAG, "Go to cameras view");
                 Intent intent = new Intent(LoginActivity.this, CamerasActivity.class);
-                intent.putExtra(CamerasActivity.CAMERAS_LIST_DATA, (Serializable) cameras);
+                intent.putExtra(CamerasActivity.RAW_CAMERAS_LIST_DATA, (Serializable) cameras);
                 startActivity(intent);
                 finish();
             }

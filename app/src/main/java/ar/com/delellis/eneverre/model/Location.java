@@ -1,23 +1,29 @@
 package ar.com.delellis.eneverre.model;
 
-import java.util.List;
+import com.google.gson.annotations.Expose;
+import com.google.gson.annotations.SerializedName;
 
-import ar.com.delellis.eneverre.api.model.Camera;
+import java.io.Serializable;
 
-public class Location {
+public class Location implements Serializable {
+    @Expose
+    @SerializedName("name")
     private final String locationName;
-    private final List<Camera> cameraList;
 
-    public Location(String locationName, List<Camera> cameraList) {
+    @Expose
+    @SerializedName("cameras")
+    private final Cameras cameras;
+
+    public Location(String locationName, Cameras cameras) {
         this.locationName = locationName;
-        this.cameraList = cameraList;
+        this.cameras = cameras;
     }
 
-    public String getLocationName() {
+    public String getName() {
         return locationName;
     }
 
-    public List<Camera> getCameraList() {
-        return cameraList;
+    public Cameras getCameras() {
+        return cameras;
     }
 }

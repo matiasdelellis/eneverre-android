@@ -6,22 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:keepScreenOn="true"
-    tools:context=".VideoActivity">
-
-    <com.google.android.material.appbar.AppBarLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:fitsSystemWindows="true">
-
-        <com.google.android.material.appbar.MaterialToolbar
-            android:id="@+id/video_toolbar"
-            android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            app:navigationIcon="@drawable/ic_arrow_back_24"
-            app:menu="@menu/video_top_app_bar"
-            app:title="@string/camera" />
-
-    </com.google.android.material.appbar.AppBarLayout>
+    tools:context=".LiveViewFragment">
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/take_snapshot"

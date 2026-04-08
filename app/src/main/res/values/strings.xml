@@ -31,4 +31,7 @@
     <string name="error_snapshot">Failed to take camera snapshot</string>
     <string name="error_get_recordings">Failed to get camera recordings</string>
     <string name="there_is_no_recording">There is no recording</string>
+    <string name="about_eneverre">About Eneverre…</string>
+    <string name="privacy_enabled">Privacy mode enabled</string>
+    <string name="privacy_disabled">Privacy mode disabled</string>
 </resources>

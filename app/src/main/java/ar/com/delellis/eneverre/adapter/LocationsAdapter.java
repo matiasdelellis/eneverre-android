@@ -8,20 +8,19 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import java.util.List;
-
 import ar.com.delellis.eneverre.R;
 import ar.com.delellis.eneverre.adapter.ui.LocationsViewHolder;
 import ar.com.delellis.eneverre.model.Location;
+import ar.com.delellis.eneverre.model.Locations;
 
 public class LocationsAdapter extends RecyclerView.Adapter<LocationsViewHolder> {
     private final Context context;
-    private final List<Location> locationList;
+    private final Locations locations;
     private final OnCameraClickListener listener;
 
-    public LocationsAdapter(Context context, List<Location> locationList, OnCameraClickListener listener) {
+    public LocationsAdapter(Context context, Locations locationList, OnCameraClickListener listener) {
         this.context = context;
-        this.locationList = locationList;
+        this.locations = locationList;
         this.listener = listener;
     }
 
@@ -34,14 +33,14 @@ public class LocationsAdapter extends RecyclerView.Adapter<LocationsViewHolder> 
 
     @Override
     public void onBindViewHolder(@NonNull LocationsViewHolder holder, int position) {
-        Location location = locationList.get(position);
-        holder.setLocationName(location.getLocationName());
-        CamerasAdapter adapter = new CamerasAdapter(context, location.getCameraList(), listener);
+        Location location = locations.get(position);
+        holder.setLocationName(location.getName());
+        CamerasAdapter adapter = new CamerasAdapter(context, location.getCameras(), listener);
         holder.setupRecyclerView(context, adapter);
     }
 
     @Override
     public int getItemCount() {
-        return locationList == null ? 0 : locationList.size();
+        return locations == null ? 0 : locations.count();
     }
 }

@@ -53,7 +53,7 @@ public class SplashActivity extends AppCompatActivity {
 
     private void goToCamerasActivity(List<Camera> cameras) {
         Intent intent = new Intent(SplashActivity.this, CamerasActivity.class);
-        intent.putExtra(CamerasActivity.CAMERAS_LIST_DATA, (Serializable) cameras);
+        intent.putExtra(CamerasActivity.RAW_CAMERAS_LIST_DATA, (Serializable) cameras);
         startActivity(intent);
         finish();
     }

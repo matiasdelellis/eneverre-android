@@ -1,0 +1,11 @@
+<menu
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/about"
+        android:title="@string/about_eneverre"
+        android:contentDescription="@string/todo"
+        app:showAsAction="never" />
+
+</menu>

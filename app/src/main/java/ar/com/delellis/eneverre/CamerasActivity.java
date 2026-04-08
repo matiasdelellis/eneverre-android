@@ -1,8 +1,12 @@
 package ar.com.delellis.eneverre;
 
+import static android.widget.Toast.LENGTH_LONG;
+
 import android.content.Intent;
 import android.os.Bundle;
-import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -10,29 +14,28 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
+import java.io.Serializable;
 import java.util.List;
-import java.util.Map;
 
 import ar.com.delellis.eneverre.adapter.LocationsAdapter;
 import ar.com.delellis.eneverre.adapter.OnCameraClickListener;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.model.Location;
+import ar.com.delellis.eneverre.model.Locations;
 
 public class CamerasActivity extends AppCompatActivity implements OnCameraClickListener {
     private static final String TAG = "CamerasActivity";
 
-    private static final int INTENT_VISUALIZE = 100;
+    private static final int INTENT_LIVE_VIEW = 100;
 
-    public static final String CAMERAS_LIST_DATA = "CAMERA_LIST";
+    public static final String RAW_CAMERAS_LIST_DATA = "RAW_CAMERA_LIST";
+    public static final String LOCATION_CAMERAS_DATA = "LOCATION_CAMERAS";
+
+    public static final String SELECTED_CAMERA_DATA = "SELECTED_CAMERA";
+
     public static final String CURRENT_CAMERA_DATA = "CURRENT_CAMERA";
 
-    private List<Location> locationList;
-    private Map<String, List<Camera>> cameraLocationMap;
-
-    private List<Camera> cameraList = null;
+    private Locations locations = null;
 
     private LocationsAdapter locationsAdapter = null;
 
@@ -45,63 +48,49 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
         setSupportActionBar(myToolbar);
 
         Intent intent = getIntent();
-        cameraList = (List<Camera>) intent.getSerializableExtra(CAMERAS_LIST_DATA);
+        List<Camera> cameraList = (List<Camera>) intent.getSerializableExtra(RAW_CAMERAS_LIST_DATA);
 
-        // Sort by name
-        Collections.sort(cameraList, (o1, o2) ->
-                o1.getName().compareToIgnoreCase(o2.getName())
-        );
-
-        // Map to cameras in locations..
-        cameraLocationMap = new HashMap<>();
-        for (Camera camera: cameraList) {
-            String location = camera.getLocation();
-
-            List<Camera> cameras = cameraLocationMap.get(location);
-            if (cameras == null) cameras = new ArrayList<>();
-
-            cameras.add(camera);
-            cameraLocationMap.put(location, cameras);
-        }
-
-        // Fill locationList of cameras.
-        locationList = new ArrayList<>();
-        for (Map.Entry<String, List<Camera>> entry : cameraLocationMap.entrySet()) {
-            locationList.add(
-                    new Location(entry.getValue().get(0).getLocation(), entry.getValue())
-            );
-        }
         RecyclerView recyclerView = findViewById(R.id.camera_list_view);
-
-        locationsAdapter = new LocationsAdapter(this, locationList, this);
-
-        // Fixme:
-        /*locationsAdapter.setOnClickListener(view -> {
-            Camera camera = cameraList.get(recyclerView.getChildAdapterPosition(view));
-
-            Intent videoIntent = new Intent(CamerasActivity.this, VideoActivity.class);
-            videoIntent.putExtra(CURRENT_CAMERA_DATA, camera);
-            startActivityForResult(videoIntent, INTENT_VISUALIZE);
-        });*/
-
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
+
+        locations = new Locations(cameraList);
+        locationsAdapter = new LocationsAdapter(this, locations, this);
         recyclerView.setAdapter(locationsAdapter);
     }
 
     @Override
     protected void onActivityResult (int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == INTENT_VISUALIZE && resultCode == RESULT_OK) {
-            //FIXME:
-            //Camera camera = (Camera) data.getSerializableExtra(CURRENT_CAMERA_DATA);
-            //locationsAdapter.updateCamera(camera.getId(), camera);
+        if (requestCode == INTENT_LIVE_VIEW && resultCode == RESULT_OK) {
+            Location location = (Location) data.getSerializableExtra(LOCATION_CAMERAS_DATA);
+            // TODO: Update privacy icons.
         }
     }
 
     @Override
-    public void onCameraClick(Camera camera) {
-        Intent videoIntent = new Intent(CamerasActivity.this, VideoActivity.class);
-        videoIntent.putExtra(CURRENT_CAMERA_DATA, camera);
-        startActivityForResult(videoIntent, INTENT_VISUALIZE);
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.cameras_top_app_bar, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int itemId = item.getItemId();
+        if (itemId == R.id.about) {
+            Toast.makeText(getApplicationContext(), R.string.about_eneverre, LENGTH_LONG).show();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void onCameraClick(Camera camera, int position) {
+        Location location = locations.get(camera.getLocation());
+
+        Intent liveIntent = new Intent(CamerasActivity.this, LiveViewActivity.class);
+        liveIntent.putExtra(LOCATION_CAMERAS_DATA, location);
+        liveIntent.putExtra(SELECTED_CAMERA_DATA, position);
+        startActivityForResult(liveIntent, INTENT_LIVE_VIEW);
     }
 }
