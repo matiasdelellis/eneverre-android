@@ -69,8 +69,6 @@ public class LiveViewFragment extends Fragment {
 
     private OnPrivacyChangeListener privacyListener;
 
-    private boolean pipMode = false;
-
     AppPreferences prefs = null;
 
     public LiveViewFragment() {
@@ -226,7 +224,9 @@ public class LiveViewFragment extends Fragment {
         }
         else {
             ptzButtons.setVisibility(GONE);
-            frameLayout.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0.0F));
+            frameLayout.setLayoutParams(
+                    new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0.0F)
+            );
         }
     }
 
@@ -327,7 +327,6 @@ public class LiveViewFragment extends Fragment {
 
     public void setPipModeLayout(boolean enabled) {
         if (enabled) {
-            Log.e(TAG, "PIP ON");
             fragmentView.findViewById(R.id.frameLayout).setLayoutParams(
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0.0F)
             );
@@ -337,7 +336,6 @@ public class LiveViewFragment extends Fragment {
             fragmentView.findViewById(R.id.privacy_button).setVisibility(GONE);
             fragmentView.findViewById(R.id.take_snapshot).setVisibility(GONE);
         } else {
-            Log.e(TAG, "PIP OFF");
             if (currentCamera.getPtz()) {
                 fragmentView.findViewById(R.id.ptz_buttons).setVisibility(VISIBLE);
             }
