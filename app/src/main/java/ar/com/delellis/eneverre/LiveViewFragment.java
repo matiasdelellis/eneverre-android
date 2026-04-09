@@ -194,7 +194,10 @@ public class LiveViewFragment extends Fragment {
     @Override
     public void onPause() {
         super.onPause();
-        stopLive(false);
+
+        if (!requireActivity().isInPictureInPictureMode()) {
+            stopLive(false);
+        }
     }
 
     @Override
@@ -273,6 +276,9 @@ public class LiveViewFragment extends Fragment {
     }
 
     public void prepareLive() {
+        if (vlcPlayer != null)
+            return;
+
         vlcPlayer = new VlcPlayer(requireContext());
         vlcPlayer.setEventListener(event -> {
             if (event.type == MediaPlayer.Event.Buffering) {

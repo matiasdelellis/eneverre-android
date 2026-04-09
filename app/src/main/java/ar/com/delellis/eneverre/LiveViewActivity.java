@@ -183,6 +183,7 @@ public class LiveViewActivity extends AppCompatActivity implements LiveViewFragm
         else {
             videoToolbar.setVisibility(GONE);
         }
+
         // FIXME: There's always one live video, but perhaps others can be seen with gestures
         for (Fragment fragment : getSupportFragmentManager().getFragments()) {
             if (fragment instanceof LiveViewFragment) {
@@ -198,6 +199,7 @@ public class LiveViewActivity extends AppCompatActivity implements LiveViewFragm
     @Override
     public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode);
+
         findViewById(R.id.video_toolbar).setVisibility(isInPictureInPictureMode ? GONE : VISIBLE);
 
         // FIXME: There's always one live video, but perhaps others can be seen with gestures
