@@ -17,6 +17,12 @@
         app:showAsAction="ifRoom" />
 
     <item
+        android:id="@+id/go_to_datetime"
+        android:title="@string/go_date_and_time"
+        android:contentDescription="@string/todo"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/download"
         android:title="@string/download_30_seconds"
         android:contentDescription="@string/todo"

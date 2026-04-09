@@ -40,6 +40,7 @@ import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.Recording;
 import ar.com.delellis.eneverre.player.VlcPlayer;
 import ar.com.delellis.eneverre.util.AppPreferences;
+import ar.com.delellis.eneverre.util.DateTimePickerDialog;
 import ar.com.delellis.eneverre.util.Download;
 import ar.com.delellis.eneverre.util.Time;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
@@ -232,6 +233,15 @@ public class PlaybackActivity extends AppCompatActivity {
                 item.setIcon(R.drawable.ic_play_24);
             }
             return true;
+        } else if (itemId == R.id.go_to_datetime) {
+            DateTimePickerDialog.show(this, calendar -> {
+                timelineSelecting = false;
+                lastTimeSelected = calendar.getTimeInMillis();
+                timelineView.setCurrent(lastTimeSelected);
+
+                String start = Time.MStoRFC3339(lastTimeSelected);
+                startPlayback(start, 30.0);
+            });
         } else if (itemId == R.id.download) {
             if (!vlcPlayer.isPaused()) {
                 vlcPlayer.pause();

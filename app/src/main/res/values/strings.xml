@@ -34,4 +34,7 @@
     <string name="about_eneverre">About Eneverre…</string>
     <string name="privacy_enabled">Privacy mode enabled</string>
     <string name="privacy_disabled">Privacy mode disabled</string>
+    <string name="cancel">Cancel</string>
+    <string name="go">Go</string>
+    <string name="go_date_and_time">Go to a date and time</string>
 </resources>
