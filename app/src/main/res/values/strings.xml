@@ -37,4 +37,7 @@
     <string name="cancel">Cancel</string>
     <string name="go">Go</string>
     <string name="go_date_and_time">Go to a date and time</string>
+    <string name="DATE_FORMAT_YEAR">EEE, MMMM d</string>
+    <string name="TIME_FORMAT_TIMELINE_HOUR">HH:mm:ss</string>
+    <string name="TIME_FORMAT_TIMELINE_MINS">mm</string>
 </resources>

@@ -4,8 +4,6 @@ import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 import static android.widget.Toast.LENGTH_LONG;
 
-import static com.alexvas.widget.TimelineView.INTERVAL_HOUR_6;
-
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -23,8 +21,6 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
-
-import com.alexvas.widget.TimelineView;
 
 import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.util.VLCVideoLayout;
@@ -44,12 +40,12 @@ import ar.com.delellis.eneverre.util.DateTimePickerDialog;
 import ar.com.delellis.eneverre.util.Download;
 import ar.com.delellis.eneverre.util.Time;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
+import ar.com.delellis.eneverre.widget.TimelineView;
+import ar.com.delellis.eneverre.widget.TimelineView.TimeRecord;
 import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
-
-import com.alexvas.widget.TimelineView.TimeRecord;
 
 public class PlaybackActivity extends AppCompatActivity {
 
@@ -87,7 +83,6 @@ public class PlaybackActivity extends AppCompatActivity {
         setOrientationLayout (orientation);
 
         timelineView = findViewById(R.id.timeline_view);
-        timelineView.setInterval(INTERVAL_HOUR_6);
 
         vlcVideoLayout = findViewById(R.id.vlc_playback_layout);
         vlcVideoLayout.setOnTouchListener(new VideoTouchListener(vlcVideoLayout));
@@ -250,12 +245,6 @@ public class PlaybackActivity extends AppCompatActivity {
             Toast.makeText(getApplicationContext(), R.string.downloading, LENGTH_LONG).show();
             String start = Time.MStoRFC3339(timelineView.getCurrent());
             downloadPlayback(start, 30.0);
-            return true;
-        } else if (itemId == R.id.increase_scale_action) {
-            timelineView.increaseIntervalWithAnimation();
-            return true;
-        } else if (itemId == R.id.decrease_scale_action) {
-            timelineView.decreaseIntervalWithAnimation();
             return true;
         }
         return super.onOptionsItemSelected(item);

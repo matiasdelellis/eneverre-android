@@ -28,15 +28,4 @@
         android:contentDescription="@string/todo"
         app:showAsAction="never" />
 
-    <item
-        android:id="@+id/increase_scale_action"
-        android:title="@string/increase_scale"
-        android:contentDescription="@string/todo"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/decrease_scale_action"
-        android:title="@string/decrease_scale"
-        android:contentDescription="@string/todo"
-        app:showAsAction="never" />
-
 </menu>
