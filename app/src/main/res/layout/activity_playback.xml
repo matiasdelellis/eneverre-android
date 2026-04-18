@@ -48,8 +48,7 @@
         <FrameLayout
             android:id="@+id/timeline_frame"
             android:layout_width="match_parent"
-            android:layout_height="100dp"
-            android:padding="4dp">
+            android:layout_height="90dp">
 
             <ar.com.delellis.eneverre.widget.TimelineView
                 android:id="@+id/timeline_view"

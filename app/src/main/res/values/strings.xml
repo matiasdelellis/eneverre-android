@@ -40,4 +40,7 @@
     <string name="DATE_FORMAT_YEAR">EEE, MMMM d</string>
     <string name="TIME_FORMAT_TIMELINE_HOUR">HH:mm:ss</string>
     <string name="TIME_FORMAT_TIMELINE_MINS">mm</string>
+    <string name="looking_for_previous_recordings">Looking for previous recordings…</string>
+    <string name="today">Today</string>
+    <string name="yesterday">Yesterday</string>
 </resources>

@@ -40,6 +40,7 @@ import java.util.Locale;
 import java.util.TimeZone;
 
 import ar.com.delellis.eneverre.R;
+import ar.com.delellis.eneverre.util.Time;
 
 public class TimelineView extends View {
 
@@ -102,21 +103,18 @@ public class TimelineView extends View {
     }
 
     private SimpleDateFormat _formatHourMin;
-    private SimpleDateFormat _formatShortDate;
 
-    private class DefaultDateFormatter implements TimeDateFormatter {
+    private static class DefaultDateFormatter implements TimeDateFormatter {
         @NonNull
         private final SimpleDateFormat _formatHours;
         @NonNull
         private final SimpleDateFormat _formatDateYear;
 
         DefaultDateFormatter(Context ctx) {
-            _formatHours = new SimpleDateFormat(
-                    ctx.getResources().getString(R.string.TIME_FORMAT_TIMELINE_HOUR),
-                    Locale.getDefault());
-            _formatDateYear = new SimpleDateFormat(
-                    ctx.getResources().getString(R.string.DATE_FORMAT_YEAR),
-                    Locale.getDefault());
+            boolean is24h = android.text.format.DateFormat.is24HourFormat(ctx);
+            String timePattern = is24h ? "HH:mm:ss" : "h:mm:ss a";
+            _formatHours = new SimpleDateFormat(timePattern, Locale.getDefault());
+            _formatDateYear = (SimpleDateFormat) android.text.format.DateFormat.getLongDateFormat(ctx);
         }
 
         @Override
@@ -675,7 +673,6 @@ public class TimelineView extends View {
 
         // Initialize SimpleDateFormats lazily (required for DefaultDateFormatter)
         _formatHourMin = new SimpleDateFormat("HH:mm", Locale.getDefault());
-        _formatShortDate = new SimpleDateFormat("MMM d", Locale.getDefault());
 
         // Initialize default formatter with context
         _timedateFormatter = new DefaultDateFormatter(context);
@@ -813,9 +810,9 @@ public class TimelineView extends View {
 
         canvas.drawLine(
                 getWidth() >> 1,
-                0,
+                6f * _density,
                 getWidth() >> 1,
-                getHeight(),
+                getHeight() - 6f * _density,
                 _paintPointer);
 
         drawCurrentTimeDate(canvas);
@@ -824,6 +821,8 @@ public class TimelineView extends View {
     private void drawCurrentTimeDate(@NonNull Canvas canvas) {
         final String time;
         final boolean isNow;
+        final String date;
+
         if (System.currentTimeMillis() - _selectedMsec < 5000) {
             time = "Now";
             isNow = true;
@@ -832,29 +831,39 @@ public class TimelineView extends View {
             isNow = false;
         }
 
-        // Draw current time
+        // Draw current time box
         _paintPointerTimeText.getTextBounds(time, 0, time.length(), r);
 
         rf.set((!isNow && _rect000000.width() > r.width()) ? _rect000000 : r);
 
         rf.offsetTo((getWidth() >> 1) - rf.width() / 2, 0);
         rf.inset(-4f * _density, -3f * _density);
-        rf.offset(0, 3f * _density);
+        rf.offset(0, 6f * _density);
         canvas.drawRoundRect(rf, 4f * _density, 3f * _density, _paintPointer);
 
+        // Draw current time
         canvas.drawText(
                 time,
                 (getWidth() >> 1) - rf.width() / 2 + 4f * _density,
-                r.height() + 3 * _density,
+                r.height() + 6 * _density,
                 _paintPointerTimeText);
 
         // Draw date
-        String date = _timedateFormatter.getStringDate(_selectedMsecDate);
+        Date todayDate = new Date(System.currentTimeMillis());
+        Date yesterdayDate = Time.dateAddDays(todayDate, -1);
+        if (Time.isSameDay(_selectedMsecDate, todayDate)) {
+            date = getContext().getString(R.string.today);
+        } else if (Time.isSameDay(_selectedMsecDate, yesterdayDate)) {
+            date = getContext().getString(R.string.yesterday);
+        } else {
+            date = _timedateFormatter.getStringDate(_selectedMsecDate);
+        }
+
         _paintPointerDateText.getTextBounds(date, 0, date.length(), r);
         canvas.drawText(
                 date,
-                getWidth() - r.width() - 2 * _density,
-                r.height() + _density,
+                getWidth() - r.width() - 6 * _density,
+                r.height() + 6 *_density,
                 _paintPointerDateText);
     }
 
@@ -941,18 +950,11 @@ public class TimelineView extends View {
 
             Date date = new Date(labelTime - _gmtOffsetInMillis);
             String text = _formatHourMin.format(date);
-            Paint paint = _paintTextRuler;
-
-            // Show date instead of 00:00
-            if ("00:00".equals(text)) {
-                text = _formatShortDate.format(date);
-                paint = _paintTextRulerMain;
-            }
 
             _paintPointerTimeText.getTextBounds(text, 0, text.length(), r);
 
             // Draw main label
-            canvas.drawText(text, x - r.width() / 2f, height - r.height(), paint);
+            canvas.drawText(text, x - r.width() / 2f, height - r.height(), _paintTextRuler);
 
             // Draw ruler line
             canvas.drawLine(

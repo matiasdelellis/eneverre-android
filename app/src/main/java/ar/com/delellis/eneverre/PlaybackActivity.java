@@ -3,6 +3,7 @@ package ar.com.delellis.eneverre;
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 import static android.widget.Toast.LENGTH_LONG;
+import static android.widget.Toast.LENGTH_SHORT;
 
 import android.content.Intent;
 import android.content.res.Configuration;
@@ -65,6 +66,7 @@ public class PlaybackActivity extends AppCompatActivity {
     private long lastTimeSelected = 0L;
     private long lastLength = 0L;
     private boolean timelineSelecting = false;
+    private long lastOldRecording = -1L;
 
     private AppPreferences prefs = null;
 
@@ -118,11 +120,13 @@ public class PlaybackActivity extends AppCompatActivity {
         timelineView.setOnTimelineListener(new TimelineView.OnTimelineListener() {
             @Override
             public void onTimeSelecting() {
+                Log.d(TAG, "onTimeSelecting");
                 timelineSelecting = true;
             }
 
             @Override
             public void onTimeSelected(long l, @Nullable TimeRecord timeRecord) {
+                Log.i(TAG, "onTimeSelected: " + Time.MStoFriendlyURL(l));
                 if (timeRecord == null)  {
                     Toast.makeText(PlaybackActivity.this, R.string.there_is_no_recording, LENGTH_LONG).show();
                     return;
@@ -136,23 +140,34 @@ public class PlaybackActivity extends AppCompatActivity {
 
             @Override
             public void onRequestMoreBackgroundData() {
-                // Nop...
+                Log.d(TAG, "onRequestMoreBackgroundData");
+
+                Toast.makeText(PlaybackActivity.this, R.string.looking_for_previous_recordings, LENGTH_SHORT).show();
+
+                long since = lastOldRecording - (24 * 60 * 60 * 1000L);
+                getRecordings(since, lastOldRecording, -1);
             }
 
             @Override
             public void onRequestMoreMajor1Data() {
+                Log.d(TAG, "onRequestMoreMajor1Data");
                 // Nop...
             }
 
             @Override
             public void onRequestMoreMajor2Data() {
+                Log.d(TAG, "onRequestMoreMajor1Data");
                 // Nop...
             }
         });
 
         findViewById(R.id.timeline_frame).setVisibility(GONE);
 
-        initializeRecordings();
+        long now = System.currentTimeMillis();
+        long yesterday = now - (24 * 60 * 60 * 1000L);
+        long select = now - (5 * 1000L);
+
+        getRecordings(yesterday, now, select);
     }
 
     @Override
@@ -317,14 +332,11 @@ public class PlaybackActivity extends AppCompatActivity {
         });
     }
 
-    private void initializeRecordings() {
+    private void getRecordings(long since, long to, long selectTime) {
         ApiClient apiClient = ApiClient.getInstance();
         ApiService apiService = ApiClient.getApiService();
 
-        long now = System.currentTimeMillis();
-        long yesterday = now - (24 * 60 * 60 * 1000L);
-
-        Call<List<Recording>> playbackCall = apiService.recordings(apiClient.getAuthorization(), currentCamera.getId(), Time.MStoRFC3339(yesterday), Time.MStoRFC3339(now));
+        Call<List<Recording>> playbackCall = apiService.recordings(apiClient.getAuthorization(), currentCamera.getId(), Time.MStoRFC3339(since), Time.MStoRFC3339(to));
         playbackCall.enqueue(new Callback<List<Recording>>() {
             @Override
             public void onResponse(Call<List<Recording>> call, Response<List<Recording>> response) {
@@ -340,7 +352,7 @@ public class PlaybackActivity extends AppCompatActivity {
                     timeRecord = new TimeRecord(startMs, durationMs, recording);
                     recordsBackgroundEvents.add(timeRecord);
                 }
-                timelineView.setBackgroundRecords(recordsBackgroundEvents);
+                timelineView.addBackgroundRecordsAtStart(recordsBackgroundEvents);
 
                 // Fake events to test the widget
 //                ArrayList<TimeRecord> recordsMajor1Events = new ArrayList<TimeRecord>();
@@ -352,10 +364,16 @@ public class PlaybackActivity extends AppCompatActivity {
 
                 //timelineView.setMajor1Records(recordsMajor1Events);
 
+                Recording firstRecording = recordings.get(0);
+                lastOldRecording = Time.RFC3339toMS(firstRecording.getStart());
+
                 findViewById(R.id.timeline_frame).setVisibility(VISIBLE);
 
-                timelineView.setCurrent(System.currentTimeMillis() - 5*1000L);
+                if (selectTime > 0)  {
+                    timelineView.setCurrent(selectTime);
+                }
             }
+
             @Override
             public void onFailure(Call<List<Recording>> call, Throwable throwable) {
                 Toast.makeText(PlaybackActivity.this, R.string.error_get_recordings, LENGTH_LONG).show();
