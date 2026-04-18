@@ -217,6 +217,8 @@ public class TimelineView extends View {
     private boolean _isSelecting = false;
     private boolean _isFlinging = false;
 
+    private boolean _requestedMoreBackground = false;
+
     @SuppressLint("ClickableViewAccessibility")
     @Override
     public boolean onTouchEvent(@NonNull MotionEvent event) {
@@ -449,9 +451,15 @@ public class TimelineView extends View {
         }
 
         if (_recordsBackground.size() > 0) {
-            TimeRecord record = _recordsBackground.get(_recordsBackground.size() - 1);
-            if (minValue < record.timestampMsec) {
-                _listener.onRequestMoreBackgroundData();
+            TimeRecord first = _recordsBackground.get(0);
+            long threshold = _intervalMsec / 4; // margen de prefetch
+            if (minValue <= first.timestampMsec + threshold) {
+                if (!_requestedMoreBackground) {
+                    _requestedMoreBackground = true;
+                    _listener.onRequestMoreBackgroundData();
+                }
+            } else {
+                _requestedMoreBackground = false;
             }
         }
     }
