@@ -20,7 +20,6 @@ import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.ScaleGestureDetector.SimpleOnScaleGestureListener;
-import android.view.SoundEffectConstants;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.animation.AccelerateDecelerateInterpolator;
@@ -214,8 +213,9 @@ public class TimelineView extends View {
         super.onDetachedFromWindow();
     }
 
-    private boolean _isTouched = false;
     private boolean _isScaling = false;
+    private boolean _isSelecting = false;
+    private boolean _isFlinging = false;
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
@@ -228,15 +228,24 @@ public class TimelineView extends View {
 
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
-                _isTouched = true;
                 _isScaling = false;
+                removeCallbacks(_selectedRunnable);
                 break;
             case MotionEvent.ACTION_CANCEL:
             case MotionEvent.ACTION_UP:
-                _isTouched = false;
-                _isScaling = false;
+                if (!_isScaling) {
+                    removeCallbacks(_selectingRunnable);
+                    removeCallbacks(_selectedRunnable);
+
+                    post(() -> {
+                        if (!_isFlinging) {
+                            _selectedRunnable.run();
+                        }
+                    });
+                }
                 break;
         }
+
         if (_gestureListener.isAnimating()) {
             _gestureListener.cancelAnimation();
         } else {
@@ -512,6 +521,7 @@ public class TimelineView extends View {
             TimeRecord record = getRecord(_selectedMsec, _recordsBackground);
             _listener.onTimeSelected(_selectedMsec, record);
         }
+        _isSelecting = false;
     };
 
     private final SimpleOnScaleGestureListener _scaleListener = new SimpleOnScaleGestureListener() {
@@ -521,23 +531,17 @@ public class TimelineView extends View {
             float scaleFactor = detector.getScaleFactor();
             long newInterval = (long)(_intervalMsec / scaleFactor);
             newInterval = Math.min(MAX_INTERVAL, Math.max(newInterval, MIN_INTERVAL));
+
             if (newInterval != _intervalMsec) {
                 _intervalMsec = newInterval;
                 _needUpdate = true;
                 invalidate();
-                removeCallbacks(_selectedRunnable);
-                post(_selectingRunnable);
-                postDelayed(_selectingRunnable, 500);
             }
             return true;
         }
 
         @Override
-        public void onScaleEnd(ScaleGestureDetector detector) {
-            // Finalize
-            if (_listener != null) {
-                _listener.onTimeSelected(_selectedMsec, getRecord(_selectedMsec, _recordsBackground));
-            }
+        public void onScaleEnd(@NonNull ScaleGestureDetector detector) {
         }
     };
 
@@ -550,13 +554,17 @@ public class TimelineView extends View {
             if (_waitForNextActionUp || _isScaling)
                 return false;
 
+            removeCallbacks(_selectedRunnable);
+            if (!_isSelecting) {
+                _isSelecting = true;
+                post(_selectingRunnable);
+            }
+
             float msecInPixels = _intervalMsec / (float)getWidth();
             long offsetInMsec = (long) (msecInPixels * distanceX);
             setCurrent(getCurrent() + offsetInMsec);
             invalidate();
-            removeCallbacks(_selectedRunnable);
-            post(_selectingRunnable);
-            postDelayed(_selectingRunnable, 500);
+
             return true;
         }
 
@@ -567,46 +575,12 @@ public class TimelineView extends View {
 
         @Override
         public boolean onSingleTapUp(MotionEvent e) {
-            int offsetInPixels = (int) (e.getX() - getWidth() / 2f);
-            float msecInPixels = _intervalMsec / (float) getWidth();
-            long offsetInMsec = (long) (msecInPixels * offsetInPixels);
-
-            long newSelectedMsec = _selectedMsec + offsetInMsec;
-            boolean foundMajor2 = false;
-            for (TimeRecord record : _recordsMajor2) {
-                if (newSelectedMsec >= record.timestampMsec &&
-                        newSelectedMsec <= (record.timestampMsec + record.durationMsec)) {
-                    newSelectedMsec = record.timestampMsec;
-                    foundMajor2 = true;
-                    break;
-                }
-            }
-
-            if (!foundMajor2) {
-                TimeRecord prevRecord = null;
-                for (TimeRecord record : _recordsMajor1) {
-                    if (newSelectedMsec >= record.timestampMsec &&
-                            newSelectedMsec <= (record.timestampMsec + record.durationMsec)) {
-                        newSelectedMsec = record.timestampMsec;
-                        break;
-                    } else if (prevRecord != null &&
-                            newSelectedMsec > (record.timestampMsec + record.durationMsec) &&
-                            newSelectedMsec < prevRecord.timestampMsec) {
-                        newSelectedMsec = prevRecord.timestampMsec;
-                        break;
-                    }
-                    prevRecord = record;
-                }
-            }
-            setCurrentWithAnimation(newSelectedMsec);
-            removeCallbacks(_selectedRunnable);
-            postDelayed(_selectedRunnable, 500);
-            playSoundEffect(SoundEffectConstants.CLICK);
-            return true;
+            return false;
         }
 
         @Override
         public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+            _isFlinging = true;
             runFlingAnimation(velocityX);
             return true;
         }
@@ -629,6 +603,11 @@ public class TimelineView extends View {
         private long savedValue;
 
         private void runFlingAnimation(float velocity) {
+            _isFlinging = true;
+
+            removeCallbacks(_selectingRunnable);
+            removeCallbacks(_selectedRunnable);
+
             int duration = (int) Math.abs(velocity * FLING_DURATION_MULTIPLIER);
             savedValue = getCurrent();
             int endValue = -(int)(velocity * FLING_X_MULTIPLIER * _intervalMsec);
@@ -639,7 +618,6 @@ public class TimelineView extends View {
             scrollAnimator.addUpdateListener(flingAnimatorListener);
             scrollAnimator.addListener(animatorListener);
             scrollAnimator.start();
-            removeCallbacks(_selectedRunnable);
         }
 
         private final ValueAnimator.AnimatorUpdateListener flingAnimatorListener = new ValueAnimator.AnimatorUpdateListener() {
@@ -658,6 +636,7 @@ public class TimelineView extends View {
             }
             @Override
             public void onAnimationEnd(Animator animation) {
+                _isFlinging = false;
                 _selectedRunnable.run();
             }
         };
@@ -859,10 +838,9 @@ public class TimelineView extends View {
      */
     private long getOptimalRulerInterval() {
         float msecInPixels = getWidth() / (float)_intervalMsec;
-        float pixelsPerInterval = MIN_PIXELS_BETWEEN_LABELS;
 
         // Calculate desired interval in milliseconds
-        long desiredIntervalMsec = (long)(pixelsPerInterval / msecInPixels);
+        long desiredIntervalMsec = (long)(MIN_PIXELS_BETWEEN_LABELS / msecInPixels);
 
         // Round to nice intervals
         return getNiceInterval(desiredIntervalMsec);
