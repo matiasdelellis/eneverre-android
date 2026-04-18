@@ -298,6 +298,14 @@ public class TimelineView extends View {
         _needUpdate = true;
     }
 
+    public void addBackgroundRecordsAtStart(@NonNull ArrayList<TimeRecord> newRecords) {
+        if (newRecords.isEmpty()) return;
+
+       _recordsBackground.addAll(0, newRecords);
+        _needUpdate = true;
+        invalidate();
+    }
+
     @NonNull
     public ArrayList<TimeRecord> getMajor1Records() {
         return _recordsMajor1;
@@ -309,6 +317,16 @@ public class TimelineView extends View {
     }
 
     public void setCurrent(long currentMsec) {
+        if (!_recordsBackground.isEmpty()) {
+            long first = _recordsBackground.get(0).timestampMsec;
+
+            long overscroll = _intervalMsec / 4;
+
+            if (currentMsec < first - overscroll) {
+                currentMsec = first - overscroll;
+            }
+        }
+
         _selectedMsec = Math.min(currentMsec, System.currentTimeMillis());
         _selectedMsecDate.setTime(_selectedMsec);
         _needUpdate = true;
