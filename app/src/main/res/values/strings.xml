@@ -40,4 +40,5 @@
     <string name="yesterday">Yesterday</string>
     <string name="starting_recording">Starting recording…</string>
     <string name="downloading_recording">Downloading the recording…</string>
+    <string name="recording_downloaded_soon">The recording will be downloaded soon…</string>
 </resources>

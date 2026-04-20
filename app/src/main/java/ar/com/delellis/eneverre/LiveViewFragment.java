@@ -3,6 +3,7 @@ package ar.com.delellis.eneverre;
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 import static android.widget.Toast.LENGTH_LONG;
+import static android.widget.Toast.LENGTH_SHORT;
 
 import static ar.com.delellis.eneverre.PlaybackActivity.INTENT_PLAYBACK_VIEW;
 
@@ -30,6 +31,8 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+
 import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.util.VLCVideoLayout;
 
@@ -37,6 +40,7 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 
 import ar.com.delellis.eneverre.api.ApiClient;
@@ -49,6 +53,7 @@ import ar.com.delellis.eneverre.util.Snapshot;
 import ar.com.delellis.eneverre.util.Time;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
 
+import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -68,6 +73,8 @@ public class LiveViewFragment extends Fragment {
     private ApiService apiService = null;
 
     private OnPrivacyChangeListener privacyListener;
+
+    private long startRecord = -1;
 
     AppPreferences prefs = null;
 
@@ -142,6 +149,29 @@ public class LiveViewFragment extends Fragment {
         view.findViewById(R.id.privacy_button).setOnClickListener(v -> {
             setVideoPrivacyLayout(true);
             stopLive(true);
+        });
+
+        view.findViewById(R.id.record_button).setVisibility(VISIBLE);
+        view.findViewById(R.id.record_button).setOnClickListener(v -> {
+            FloatingActionButton fab = (FloatingActionButton) v;
+            if (startRecord < 0) {
+                startRecord = System.currentTimeMillis();
+
+                fab.setImageResource(R.drawable.ic_stop_circle_24);
+                Toast.makeText(requireContext(), getString(R.string.starting_recording), LENGTH_SHORT).show();
+            } else {
+                long _startRecord = startRecord;
+                long stopRecord = System.currentTimeMillis();
+                double duration = (double) (stopRecord - _startRecord) / 1000.0;
+
+                fragmentView.postDelayed(() -> {
+                    downloadPlayback(_startRecord, duration);
+                }, 2500);
+
+                fab.setImageResource(R.drawable.ic_screen_record_24);
+                Toast.makeText(requireContext(), R.string.recording_downloaded_soon, LENGTH_LONG).show();
+                startRecord = -1L;
+            }
         });
 
         view.findViewById(R.id.take_snapshot).setVisibility(VISIBLE);
@@ -348,6 +378,38 @@ public class LiveViewFragment extends Fragment {
             fragmentView.findViewById(R.id.privacy_button).setVisibility(VISIBLE);
             fragmentView.findViewById(R.id.take_snapshot).setVisibility(VISIBLE);
         }
+    }
+
+    private void downloadPlayback(long startRecord, double duration) {
+        ApiClient apiClient = ApiClient.getInstance();
+        ApiService apiService = ApiClient.getApiService();
+
+        String startDownload = Time.MStoRFC3339(startRecord);
+
+        Call<ResponseBody> recordingCall = apiService.recording(apiClient.getAuthorization(), currentCamera.getId(), startDownload, duration);
+        recordingCall.enqueue(new Callback<ResponseBody>() {
+            @Override
+            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                if (!response.isSuccessful()) {
+                    Toast.makeText(requireContext(), R.string.error_download, LENGTH_LONG).show();
+                    return;
+                }
+
+                String dateTime = Time.MStoFriendlyURL(startRecord);
+                File downloadFile = Download.getDownloadFile(currentCamera.getId(), dateTime,"mp4");
+                try {
+                    Download.writeFile(response.body().bytes(), downloadFile);
+                    Download.share(requireContext(), Uri.parse(downloadFile.getPath()), currentCamera.getName(), "video/mp4");
+                } catch (IOException e) {
+                    Toast.makeText(requireContext(), R.string.error_download, LENGTH_LONG).show();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ResponseBody> call, Throwable throwable) {
+                Toast.makeText(requireContext(), R.string.error_download, LENGTH_LONG).show();
+            }
+        });
     }
 
     private static class VoidPtzCallback implements Callback<Void> {
