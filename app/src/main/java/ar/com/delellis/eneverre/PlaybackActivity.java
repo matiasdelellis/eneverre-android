@@ -8,12 +8,14 @@ import static android.widget.Toast.LENGTH_SHORT;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.SurfaceView;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -28,8 +30,12 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.util.VLCVideoLayout;
 
+import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,6 +47,7 @@ import ar.com.delellis.eneverre.player.VlcPlayer;
 import ar.com.delellis.eneverre.util.AppPreferences;
 import ar.com.delellis.eneverre.util.DateTimePickerDialog;
 import ar.com.delellis.eneverre.util.Download;
+import ar.com.delellis.eneverre.util.Snapshot;
 import ar.com.delellis.eneverre.util.Time;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
 import ar.com.delellis.eneverre.widget.TimelineView;
@@ -146,6 +153,10 @@ public class PlaybackActivity extends AppCompatActivity {
                 timelineView.setMajor1Records(fakeRecordingEvents);
                 startRecord = -1L;
             }
+        });
+
+        findViewById(R.id.take_snapshot).setOnClickListener(v -> {
+            takeSnapshot();
         });
 
         prefs = AppPreferences.getInstance(this);
@@ -405,6 +416,27 @@ public class PlaybackActivity extends AppCompatActivity {
             public void onFailure(Call<List<Recording>> call, Throwable throwable) {
                 Toast.makeText(PlaybackActivity.this, R.string.error_get_recordings, LENGTH_LONG).show();
                 Log.e(TAG, throwable.toString());
+            }
+        });
+    }
+
+    private void takeSnapshot() {
+        SurfaceView surfaceView = findViewById(org.videolan.R.id.surface_video);
+        Snapshot.getSurfaceBitmap(surfaceView, new Snapshot.PixelCopyListener() {
+            @Override
+            public void onSurfaceBitmapReady(Bitmap bitmap) {
+                File snapshotFile = Download.getDownloadFile(currentCamera.getName(), Time.MStoFriendlyURL(System.currentTimeMillis()), "png");
+                try {
+                    OutputStream out = new BufferedOutputStream(new FileOutputStream(snapshotFile));
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 0, out);
+                    Download.share(PlaybackActivity.this, Uri.parse(snapshotFile.getPath()), currentCamera.getName(), "image/png");
+                } catch (FileNotFoundException e) {
+                    Toast.makeText(PlaybackActivity.this, R.string.error_snapshot, LENGTH_LONG).show();
+                }
+            }
+            @Override
+            public void onSurfaceBitmapError(int errorCode) {
+                Toast.makeText(PlaybackActivity.this, R.string.error_snapshot, LENGTH_LONG).show();
             }
         });
     }
