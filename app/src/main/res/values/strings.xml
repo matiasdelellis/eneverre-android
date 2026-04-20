@@ -10,7 +10,6 @@
     <string name="serverHint">https://</string>
     <string name="required_configuration">Required configuration</string>
     <string name="live_view">Live view</string>
-    <string name="devices">Devices</string>
     <string name="todo">TODO</string>
     <string name="camera">Camera</string>
     <string name="reconnect">Reconnect</string>
@@ -18,12 +17,11 @@
     <string name="mute">Mute</string>
     <string name="recalibrate_position">Recalibrate the position…</string>
     <string name="cameras">Cameras</string>
+    <string name="enter_privacy_mode">Activate privacy mode</string>
     <string name="exit_privacy_mode">Exit privacy mode</string>
     <string name="picture_in_picture">Picture in Picture</string>
     <string name="playback">Playback</string>
     <string name="pause">Pause</string>
-    <string name="increase_scale">Increase timeline</string>
-    <string name="decrease_scale">Decrease timeline</string>
     <string name="reproduction_and_events">Reproduction and events</string>
     <string name="download_30_seconds">Download 30 seconds</string>
     <string name="downloading">Downloading…</string>
@@ -37,10 +35,9 @@
     <string name="cancel">Cancel</string>
     <string name="go">Go</string>
     <string name="go_date_and_time">Go to a date and time</string>
-    <string name="DATE_FORMAT_YEAR">EEE, MMMM d</string>
-    <string name="TIME_FORMAT_TIMELINE_HOUR">HH:mm:ss</string>
-    <string name="TIME_FORMAT_TIMELINE_MINS">mm</string>
     <string name="looking_for_previous_recordings">Looking for previous recordings…</string>
     <string name="today">Today</string>
     <string name="yesterday">Yesterday</string>
+    <string name="starting_recording">Starting recording…</string>
+    <string name="downloading_recording">Downloading the recording…</string>
 </resources>

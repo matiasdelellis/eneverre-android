@@ -23,6 +23,8 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+
 import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.util.VLCVideoLayout;
 
@@ -68,6 +70,8 @@ public class PlaybackActivity extends AppCompatActivity {
     private boolean timelineSelecting = false;
     private long lastOldRecording = -1L;
 
+    private long startRecord = -1;
+
     private AppPreferences prefs = null;
 
     @Override
@@ -101,6 +105,15 @@ public class PlaybackActivity extends AppCompatActivity {
                 if (timelineSelecting) return;
                 long newTime = lastTimeSelected + (long) (lastLength*event.getPositionChanged());
                 timelineView.setCurrentWithAnimation(newTime);
+
+                if (startRecord > 0) {
+                    ArrayList<TimeRecord> fakeRecordingEvents = new ArrayList<TimeRecord>();
+                    long duration = newTime - startRecord - 100L;
+                    TimeRecord recordEvent = new TimeRecord(startRecord, duration, null);
+                    fakeRecordingEvents.add(recordEvent);
+
+                    timelineView.setMajor1Records(fakeRecordingEvents);
+                }
             } else if (event.type == MediaPlayer.Event.LengthChanged) {
                 lastLength = event.getLengthChanged();
             } else if (event.type == MediaPlayer.Event.EndReached) {
@@ -109,6 +122,29 @@ public class PlaybackActivity extends AppCompatActivity {
                 timelineView.setCurrentWithAnimation(lastTimeSelected);
             } else if (event.type == MediaPlayer.Event.EncounteredError) {
                 findViewById(R.id.loading_progress).setVisibility(GONE);
+            }
+        });
+
+        findViewById(R.id.record_button).setOnClickListener(v -> {
+            FloatingActionButton fab = (FloatingActionButton) v;
+            if (startRecord < 0) {
+                startRecord = timelineView.getCurrent();
+
+                fab.setImageResource(R.drawable.ic_stop_circle_24);
+                Toast.makeText(this, getString(R.string.starting_recording), LENGTH_SHORT).show();
+            } else {
+                long stopRecord = timelineView.getCurrent();
+
+                String startDownload = Time.MStoRFC3339(startRecord);
+                double duration = (double) (stopRecord - startRecord) / 1000.0;
+
+                downloadPlayback(startDownload, duration);
+                Toast.makeText(this, R.string.downloading_recording, LENGTH_LONG).show();
+
+                fab.setImageResource(R.drawable.ic_screen_record_24);
+                ArrayList<TimeRecord> fakeRecordingEvents = new ArrayList<TimeRecord>();
+                timelineView.setMajor1Records(fakeRecordingEvents);
+                startRecord = -1L;
             }
         });
 
@@ -252,15 +288,6 @@ public class PlaybackActivity extends AppCompatActivity {
                 String start = Time.MStoRFC3339(lastTimeSelected);
                 startPlayback(start, 30.0);
             });
-        } else if (itemId == R.id.download) {
-            if (!vlcPlayer.isPaused()) {
-                vlcPlayer.pause();
-                item.setIcon(R.drawable.ic_play_24);
-            }
-            Toast.makeText(getApplicationContext(), R.string.downloading, LENGTH_LONG).show();
-            String start = Time.MStoRFC3339(timelineView.getCurrent());
-            downloadPlayback(start, 30.0);
-            return true;
         }
         return super.onOptionsItemSelected(item);
     }
