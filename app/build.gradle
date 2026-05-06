@@ -2,8 +2,20 @@ plugins {
     alias(libs.plugins.android.application)
 }
 
+def storeFileProp = project.findProperty("STORE_FILE")
+def storePasswordProp = project.findProperty("STORE_PASSWORD")
+def keyAliasProp = project.findProperty("KEY_ALIAS")
+def keyPasswordProp = project.findProperty("KEY_PASSWORD")
+
+if (!storeFileProp || !storePasswordProp || !keyAliasProp || !keyPasswordProp) {
+    throw new GradleException("Missing signing configuration!")
+}
+
 android {
+    def enableSplitArquitectures = false
+
     namespace 'ar.com.delellis.eneverre'
+
     compileSdk 35
 
     defaultConfig {
@@ -16,16 +28,45 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        release {
+            if (storeFileProp != null) {
+                storeFile = file(storeFileProp)
+                storePassword = storePasswordProp
+                keyAlias = keyAliasProp
+                keyPassword = keyPasswordProp
+            }
+        }
+    }
+
+    gradle.startParameter.taskNames.each { task ->
+        if (task.contains("assembleRelease")) {
+            enableSplitArquitectures = true
+        }
+    }
+
+    splits {
+        abi {
+            enable enableSplitArquitectures
+            reset()
+            include "armeabi-v7a", "arm64-v8a"
+            universalApk true
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
+
     buildFeatures {
         viewBinding true
     }
