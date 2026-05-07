@@ -2,14 +2,12 @@ plugins {
     alias(libs.plugins.android.application)
 }
 
+def apiHostProp = project.findProperty("API_HOST") ?: ""
+
 def storeFileProp = project.findProperty("STORE_FILE")
 def storePasswordProp = project.findProperty("STORE_PASSWORD")
 def keyAliasProp = project.findProperty("KEY_ALIAS")
 def keyPasswordProp = project.findProperty("KEY_PASSWORD")
-
-if (!storeFileProp || !storePasswordProp || !keyAliasProp || !keyPasswordProp) {
-    throw new GradleException("Missing signing configuration!")
-}
 
 android {
     def enableSplitArquitectures = false
@@ -25,7 +23,7 @@ android {
         versionCode 1
         versionName "0.2"
 
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField "String", "API_HOST", "\"${apiHostProp}\""
     }
 
     signingConfigs {
@@ -56,7 +54,12 @@ android {
 
     buildTypes {
         release {
+            if (!storeFileProp || !storePasswordProp || !keyAliasProp || !keyPasswordProp) {
+                throw new GradleException("Missing signing configuration!")
+            }
+
             signingConfig signingConfigs.release
+
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -68,6 +71,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig true
         viewBinding true
     }
 }

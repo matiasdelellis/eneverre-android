@@ -41,12 +41,19 @@ public class LoginActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
+        secureStore = SecureStore.getInstance(this);
+
         hostText = (EditText) findViewById(R.id.editServer);
+        if (!BuildConfig.API_HOST.isEmpty()) {
+            hostText.setText(BuildConfig.API_HOST);
+            hostText.setVisibility(GONE);
+        } else {
+            hostText.setText(secureStore.getConfigHost());
+        }
+
         usernameText = (EditText) findViewById(R.id.editUsername);
         passwordText = (EditText) findViewById(R.id.editPassword);
 
-        secureStore = SecureStore.getInstance(this);
-        hostText.setText(secureStore.getConfigHost());
         usernameText.setText(secureStore.getConfigUsername());
         passwordText.setText(secureStore.getConfigPassword());
 
