@@ -31,7 +31,20 @@ public class Download {
         shareIntent.setAction(Intent.ACTION_SEND);
         shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
         shareIntent.setType(mimetype);
-        context.startActivity(Intent.createChooser(shareIntent, title));
+        shareIntent.putExtra(Intent.EXTRA_TITLE, title);
+
+        shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        shareIntent.setClipData(
+                android.content.ClipData.newUri(
+                        context.getContentResolver(),
+                        "image",
+                        uri
+                )
+        );
+
+        Intent chooser = Intent.createChooser(shareIntent, title);
+        chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        context.startActivity(chooser);
     }
 
 }

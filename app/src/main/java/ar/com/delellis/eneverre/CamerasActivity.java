@@ -4,6 +4,7 @@ import static android.widget.Toast.LENGTH_LONG;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -18,9 +19,17 @@ import java.util.List;
 
 import ar.com.delellis.eneverre.adapter.LocationsAdapter;
 import ar.com.delellis.eneverre.adapter.OnCameraClickListener;
+import ar.com.delellis.eneverre.api.ApiClient;
+import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.Camera;
+import ar.com.delellis.eneverre.api.model.UserCode;
+import ar.com.delellis.eneverre.api.model.VerifyStatus;
 import ar.com.delellis.eneverre.model.Location;
 import ar.com.delellis.eneverre.model.Locations;
+import ar.com.delellis.eneverre.util.UserCodePickerDialog;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class CamerasActivity extends AppCompatActivity implements OnCameraClickListener {
     private static final String TAG = "CamerasActivity";
@@ -78,6 +87,12 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
             Toast.makeText(getApplicationContext(), R.string.about_eneverre, LENGTH_LONG).show();
             return true;
         }
+        else if (itemId == R.id.linkDevice) {
+            UserCodePickerDialog.show(this, code -> {
+                onUserCodeRequest(code);
+            });
+            return true;
+        }
         return super.onOptionsItemSelected(item);
     }
 
@@ -89,5 +104,33 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
         liveIntent.putExtra(LOCATION_CAMERAS_DATA, location);
         liveIntent.putExtra(SELECTED_CAMERA_DATA, position);
         startActivityForResult(liveIntent, INTENT_LIVE_VIEW);
+    }
+
+    private void onUserCodeRequest(String user_code) {
+        ApiClient apiClient = ApiClient.getInstance();
+        ApiService apiService = ApiClient.getApiService();
+
+        UserCode userCode = new UserCode(user_code);
+
+        Call<VerifyStatus> verifyStatusCall = apiService.device_verify(apiClient.getAuthorization(), userCode);
+        verifyStatusCall.enqueue(new Callback<VerifyStatus>() {
+            @Override
+            public void onResponse(Call<VerifyStatus> call, Response<VerifyStatus> response) {
+                // TODO: Check error code
+                String status = response.body().getStatus();
+                if ("approved".equals(status)) {
+                    Toast.makeText(CamerasActivity.this, R.string.approved_device, LENGTH_LONG).show();
+                } else if ("expired".equals(status)) {
+                    Toast.makeText(CamerasActivity.this, R.string.the_code_has_expired, LENGTH_LONG).show();
+                } else if ("invalid".equals(status)) {
+                    Toast.makeText(CamerasActivity.this, R.string.invalid_user_code, LENGTH_LONG).show();
+                }
+            }
+            @Override
+            public void onFailure(Call<VerifyStatus> call, Throwable throwable) {
+                Log.e(TAG, "onUserCodeRequest onFailure: " + throwable.getMessage());
+                Toast.makeText(CamerasActivity.this, getString(R.string.device_linking_failed), LENGTH_LONG).show();
+            }
+        });
     }
 }

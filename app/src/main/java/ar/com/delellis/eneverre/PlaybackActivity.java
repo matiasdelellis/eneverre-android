@@ -6,6 +6,7 @@ import static android.widget.Toast.LENGTH_LONG;
 import static android.widget.Toast.LENGTH_SHORT;
 
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -24,7 +25,9 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.content.ContextCompat;
 
+import com.google.android.material.color.MaterialColors;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import org.videolan.libvlc.MediaPlayer;
@@ -138,6 +141,9 @@ public class PlaybackActivity extends AppCompatActivity {
                 startRecord = timelineView.getCurrent();
 
                 fab.setImageResource(R.drawable.ic_stop_circle_24);
+                int color = ContextCompat.getColor(fab.getContext(), R.color.record_red);
+                fab.setImageTintList(ColorStateList.valueOf(color));
+
                 Toast.makeText(this, getString(R.string.starting_recording), LENGTH_SHORT).show();
             } else {
                 long stopRecord = timelineView.getCurrent();
@@ -148,7 +154,12 @@ public class PlaybackActivity extends AppCompatActivity {
                 downloadPlayback(startDownload, duration);
                 Toast.makeText(this, R.string.downloading_recording, LENGTH_LONG).show();
 
-                fab.setImageResource(R.drawable.ic_screen_record_24);
+                fab.setImageResource(R.drawable.ic_video_cam_24);
+                int color = MaterialColors.getColor(
+                        fab,
+                        com.google.android.material.R.attr.colorOnSecondaryContainer);
+                fab.setImageTintList(ColorStateList.valueOf(color));
+
                 ArrayList<TimeRecord> fakeRecordingEvents = new ArrayList<TimeRecord>();
                 timelineView.setMajor1Records(fakeRecordingEvents);
                 startRecord = -1L;

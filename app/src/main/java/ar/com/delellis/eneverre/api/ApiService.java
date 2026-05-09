@@ -4,8 +4,11 @@ import java.util.List;
 
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.Recording;
+import ar.com.delellis.eneverre.api.model.UserCode;
+import ar.com.delellis.eneverre.api.model.VerifyStatus;
 import okhttp3.ResponseBody;
 import retrofit2.Call;
+import retrofit2.http.Body;
 import retrofit2.http.GET;
 import retrofit2.http.Header;
 import retrofit2.http.POST;
@@ -33,4 +36,7 @@ public interface ApiService {
 
     @GET("camera/{device_id}/playback/get")
     Call<ResponseBody> recording(@Header("Authorization") String authorization, @Path("device_id") String device_id, @Query("start") String start, @Query("duration") double duration);
+
+    @POST("auth/device/verify")
+    Call<VerifyStatus> device_verify(@Header("Authorization") String authorization, @Body UserCode userCode);
 }

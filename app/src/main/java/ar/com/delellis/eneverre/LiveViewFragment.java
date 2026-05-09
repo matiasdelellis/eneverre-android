@@ -9,6 +9,7 @@ import static ar.com.delellis.eneverre.PlaybackActivity.INTENT_PLAYBACK_VIEW;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -19,6 +20,7 @@ import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import android.util.Log;
@@ -31,6 +33,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
+import com.google.android.material.color.MaterialColors;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import org.videolan.libvlc.MediaPlayer;
@@ -158,6 +161,8 @@ public class LiveViewFragment extends Fragment {
                 startRecord = System.currentTimeMillis();
 
                 fab.setImageResource(R.drawable.ic_stop_circle_24);
+                int color = ContextCompat.getColor(fab.getContext(), R.color.record_red);
+                fab.setImageTintList(ColorStateList.valueOf(color));
                 Toast.makeText(requireContext(), getString(R.string.starting_recording), LENGTH_SHORT).show();
             } else {
                 long _startRecord = startRecord;
@@ -168,7 +173,11 @@ public class LiveViewFragment extends Fragment {
                     downloadPlayback(_startRecord, duration);
                 }, 2500);
 
-                fab.setImageResource(R.drawable.ic_screen_record_24);
+                fab.setImageResource(R.drawable.ic_video_cam_24);
+                int color = MaterialColors.getColor(
+                        fab,
+                        com.google.android.material.R.attr.colorOnSecondaryContainer);
+                fab.setImageTintList(ColorStateList.valueOf(color));
                 Toast.makeText(requireContext(), R.string.recording_downloaded_soon, LENGTH_LONG).show();
                 startRecord = -1L;
             }
@@ -266,6 +275,7 @@ public class LiveViewFragment extends Fragment {
     private void setVideoPrivacyLayout(boolean privacy) {
         fragmentView.findViewById(R.id.take_snapshot).setEnabled(!privacy);
         fragmentView.findViewById(R.id.privacy_button).setEnabled(!privacy);
+        fragmentView.findViewById(R.id.record_button).setEnabled(!privacy);
 
         fragmentView.findViewById(R.id.exit_privacy_button).setVisibility(privacy ? VISIBLE : GONE);
 
@@ -369,12 +379,14 @@ public class LiveViewFragment extends Fragment {
             if (currentCamera.getPtz()) {
                 fragmentView.findViewById(R.id.ptz_buttons).setVisibility(GONE);
             }
+            fragmentView.findViewById(R.id.record_button).setVisibility(GONE);
             fragmentView.findViewById(R.id.privacy_button).setVisibility(GONE);
             fragmentView.findViewById(R.id.take_snapshot).setVisibility(GONE);
         } else {
             if (currentCamera.getPtz()) {
                 fragmentView.findViewById(R.id.ptz_buttons).setVisibility(VISIBLE);
             }
+            fragmentView.findViewById(R.id.record_button).setVisibility(VISIBLE);
             fragmentView.findViewById(R.id.privacy_button).setVisibility(VISIBLE);
             fragmentView.findViewById(R.id.take_snapshot).setVisibility(VISIBLE);
         }

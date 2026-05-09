@@ -41,4 +41,11 @@
     <string name="starting_recording">Starting recording…</string>
     <string name="downloading_recording">Downloading the recording…</string>
     <string name="recording_downloaded_soon">The recording will be downloaded soon…</string>
+    <string name="link_device">Link device</string>
+    <string name="accept">Accept</string>
+    <string name="linkDeviceMessage">Enter the code that appears on the screen</string>
+    <string name="device_linking_failed">Device linking failed</string>
+    <string name="approved_device">Approved device</string>
+    <string name="the_code_has_expired">The code has expired</string>
+    <string name="invalid_user_code">Invalid user code</string>
 </resources>
