@@ -5,6 +5,7 @@ import com.google.gson.annotations.SerializedName;
 
 import java.io.Serializable;
 
+@SuppressWarnings("unused")
 public class Camera implements Serializable {
     @Expose
     @SerializedName("id")
@@ -23,8 +24,8 @@ public class Camera implements Serializable {
     private String comment;
 
     @Expose
-    @SerializedName("live")
-    private String live;
+    @SerializedName("rtsp")
+    private String rtsp;
 
     @Expose
     @SerializedName("playback")
@@ -62,8 +63,8 @@ public class Camera implements Serializable {
         return comment;
     }
 
-    public String getLive() {
-        return live;
+    public String getRtsp() {
+        return rtsp;
     }
 
     public boolean hasPlayback() {

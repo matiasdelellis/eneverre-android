@@ -337,7 +337,7 @@ public class LiveViewFragment extends Fragment {
     }
 
     private void startLive() {
-        String videoUrl = currentCamera.getLive();
+        String videoUrl = currentCamera.getRtsp();
         vlcPlayer.playUri(Uri.parse(videoUrl));
     }
 
