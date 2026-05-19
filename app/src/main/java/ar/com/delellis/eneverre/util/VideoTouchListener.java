@@ -22,7 +22,7 @@ public class VideoTouchListener implements View.OnTouchListener {
     private int maxScrollX = 0;
     private int maxScrollY = 0;
 
-    private VLCVideoLayout vlcVideoLayout = null;
+    private final VLCVideoLayout vlcVideoLayout;
 
     public VideoTouchListener(VLCVideoLayout view) {
         vlcVideoLayout = view;
@@ -53,7 +53,7 @@ public class VideoTouchListener implements View.OnTouchListener {
                     float dx = (event.getRawX() - lastEvent.x) / currentScale;
                     int scrollX = vlcVideoLayout.getScrollX() - (int) dx;
                     scrollX = clamp(scrollX, -maxScrollX, maxScrollX);
-                    vlcVideoLayout.setScrollX((int) scrollX);
+                    vlcVideoLayout.setScrollX(scrollX);
 
                     float dy = (event.getRawY() - lastEvent.y) / currentScale;
                     int scrrollY = vlcVideoLayout.getScrollY() - (int) dy;
@@ -66,7 +66,7 @@ public class VideoTouchListener implements View.OnTouchListener {
                     float calcScale = (newDistance / lastDistance);
 
                     calcScale = vlcVideoLayout.getScaleX() * calcScale;
-                    currentScale = clamp(calcScale, 1.0f, 5f);
+                    currentScale = clamp(calcScale, 1.0f, 9f);
 
                     vlcVideoLayout.setScaleX(currentScale);
                     vlcVideoLayout.setScaleY(currentScale);
