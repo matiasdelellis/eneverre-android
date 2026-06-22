@@ -27,6 +27,9 @@
             android:name=".CamerasActivity"
             android:exported="false" />
         <activity
+            android:name=".AboutActivity"
+            android:exported="false" />
+        <activity
             android:name=".PlaybackActivity"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:exported="false" />

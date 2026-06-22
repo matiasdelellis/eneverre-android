@@ -80,7 +80,7 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
     public boolean onOptionsItemSelected(MenuItem item) {
         int itemId = item.getItemId();
         if (itemId == R.id.about) {
-            Toast.makeText(getApplicationContext(), R.string.about_eneverre, LENGTH_LONG).show();
+            startActivity(new Intent(this, AboutActivity.class));
             return true;
         }
         else if (itemId == R.id.linkDevice) {
