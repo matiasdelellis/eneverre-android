@@ -54,7 +54,9 @@ android {
 
     buildTypes {
         release {
-            if (!storeFileProp || !storePasswordProp || !keyAliasProp || !keyPasswordProp) {
+            // Only require signing when actually assembling a release build, so
+            // debug builds (e.g. ./gradlew assembleDebug) don't need secrets.
+            if (enableSplitArquitectures && (!storeFileProp || !storePasswordProp || !keyAliasProp || !keyPasswordProp)) {
                 throw new GradleException("Missing signing configuration!")
             }
 
@@ -77,20 +79,19 @@ android {
 }
 
 dependencies {
-    implementation 'org.videolan.android:libvlc-all:3.6.1'
-    implementation 'com.squareup.retrofit2:retrofit:2.11.0'
-    implementation 'com.squareup.retrofit2:converter-gson:2.11.0'
-    implementation 'com.squareup.okhttp3:logging-interceptor:4.9.3'
-    implementation("com.squareup.okhttp3:okhttp")
+    implementation libs.libvlc
+    implementation libs.retrofit
+    implementation libs.retrofit.converter.gson
+    implementation libs.okhttp
+    implementation libs.okhttp.logging.interceptor
 
-    implementation 'com.google.android.material:material:1.12.0'
-    implementation 'androidx.recyclerview:recyclerview:1.4.0'
-    implementation 'androidx.cardview:cardview:1.0.0'
+    implementation libs.material
+    implementation libs.recyclerview
+    implementation libs.cardview
 
-    implementation 'androidx.security:security-crypto:1.0.0'
+    implementation libs.security.crypto
 
     implementation libs.appcompat
-    implementation libs.material
     implementation libs.activity
     implementation libs.constraintlayout
     implementation libs.annotation
