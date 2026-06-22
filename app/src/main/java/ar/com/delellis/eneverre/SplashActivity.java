@@ -11,6 +11,7 @@ import java.util.List;
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.util.ApiCallback;
+import ar.com.delellis.eneverre.util.ApiError;
 import ar.com.delellis.eneverre.util.SecureStore;
 
 public class SplashActivity extends AppCompatActivity {
@@ -49,7 +50,11 @@ public class SplashActivity extends AppCompatActivity {
             }
             @Override
             public void onError(int httpCode, String message) {
-                // Stored credentials no longer work (or no network): re-authenticate.
+                // If the server rejected the credentials, discard them so the
+                // user re-enters valid ones. Transient errors (no network) keep them.
+                if (ApiError.isUnauthorized(httpCode)) {
+                    secureStore.clearCredentials();
+                }
                 goToLoginActivicy();
             }
         });

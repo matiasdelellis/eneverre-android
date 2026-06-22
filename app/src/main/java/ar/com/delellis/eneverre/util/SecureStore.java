@@ -18,18 +18,33 @@ public class SecureStore {
 
     private static SecureStore instance;
 
-    private SharedPreferences prefs;
+    private final SharedPreferences prefs;
 
     private SecureStore(Context context) {
-        try {
-            String masterKeys = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC);
-            this.prefs = EncryptedSharedPreferences
-                    .create(PREFERENCES, masterKeys, context, EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM);
+        this.prefs = openEncrypted(context.getApplicationContext());
+    }
 
+    private static SharedPreferences openEncrypted(Context context) {
+        try {
+            return create(context);
         } catch (GeneralSecurityException | IOException e) {
-            this.prefs = null;
+            // The encrypted store can become undecryptable (e.g. after a
+            // backup/restore or a keystore reset). Drop it and recreate so the
+            // app stays usable — the user simply has to log in again.
+            context.deleteSharedPreferences(PREFERENCES);
+            try {
+                return create(context);
+            } catch (GeneralSecurityException | IOException e2) {
+                throw new IllegalStateException("Unable to initialize secure storage", e2);
+            }
         }
+    }
+
+    private static SharedPreferences create(Context context) throws GeneralSecurityException, IOException {
+        String masterKey = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC);
+        return EncryptedSharedPreferences
+                .create(PREFERENCES, masterKey, context, EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM);
     }
 
     public static SecureStore getInstance(Context context) {
@@ -48,6 +63,15 @@ public class SecureStore {
             return false;
 
         return true;
+    }
+
+    /** Removes the stored host/username/password (e.g. on logout or a 401). */
+    public void clearCredentials() {
+        prefs.edit()
+                .remove(KEY_CONFIG_HOST)
+                .remove(KEY_CONFIG_USERNAME)
+                .remove(KEY_CONFIG_PASSWORD)
+                .apply();
     }
 
     public String getConfigHost() {
