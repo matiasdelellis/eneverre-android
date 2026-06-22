@@ -7,7 +7,6 @@ import static android.widget.Toast.LENGTH_SHORT;
 
 
 import android.content.Context;
-import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -20,9 +19,14 @@ import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.MenuProvider;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.Lifecycle;
 
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -71,6 +75,40 @@ public class LiveViewFragment extends Fragment {
 
     AppPreferences prefs = null;
 
+    /** Live controls in the host toolbar; only the resumed (visible) page contributes. */
+    private final MenuProvider liveMenu = new MenuProvider() {
+        @Override
+        public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+            inflater.inflate(R.menu.video_top_app_bar, menu);
+        }
+
+        @Override
+        public void onPrepareMenu(@NonNull Menu menu) {
+            boolean privacy = currentCamera.getPrivacy();
+            menu.findItem(R.id.pip_action).setVisible(!privacy);
+            menu.findItem(R.id.volume_action).setVisible(!privacy);
+            menu.findItem(R.id.recalibrate_ptz).setVisible(currentCamera.getPtz() && !privacy);
+            menu.findItem(R.id.volume_action).setIcon(
+                    prefs.isGlobalMute() ? R.drawable.ic_muted_24 : R.drawable.ic_volume_24);
+        }
+
+        @Override
+        public boolean onMenuItemSelected(@NonNull MenuItem item) {
+            int itemId = item.getItemId();
+            if (itemId == R.id.pip_action) {
+                ((ViewActivity) requireActivity()).enterPipMode(currentCamera);
+                return true;
+            } else if (itemId == R.id.volume_action) {
+                boolean muted = !prefs.isGlobalMute();
+                setMuteLive(muted);
+                prefs.setGlobalMute(muted);
+                item.setIcon(muted ? R.drawable.ic_muted_24 : R.drawable.ic_volume_24);
+                return true;
+            }
+            return false;
+        }
+    };
+
     public LiveViewFragment() {
         // Required empty public constructor
     }
@@ -103,6 +141,9 @@ public class LiveViewFragment extends Fragment {
         fragmentView = view;
 
         apiService = ApiClient.getApiService();
+        prefs = AppPreferences.getInstance(requireContext());
+
+        requireActivity().addMenuProvider(liveMenu, getViewLifecycleOwner(), Lifecycle.State.RESUMED);
 
         int orientation = getResources().getConfiguration().orientation;
         setOrientationLayout(orientation);
@@ -114,13 +155,6 @@ public class LiveViewFragment extends Fragment {
 
         vlcVideoLayout = view.findViewById(R.id.vlc_video_Layout);
         vlcVideoLayout.setOnTouchListener(new VideoTouchListener(vlcVideoLayout));
-
-        view.findViewById(R.id.go_playback_button).setVisibility(currentCamera.hasPlayback() ? VISIBLE : GONE);
-        view.findViewById(R.id.go_playback_button).setOnClickListener(v -> {
-            Intent goIntent = new Intent(requireActivity(), PlaybackActivity.class);
-            goIntent.putExtra(LiveViewActivity.CURRENT_CAMERA_DATA, currentCamera);
-            startActivity(goIntent);
-        });
 
         view.findViewById(R.id.reconnect_button).setVisibility(GONE);
         view.findViewById(R.id.reconnect_button).setOnClickListener(v -> {
@@ -177,8 +211,6 @@ public class LiveViewFragment extends Fragment {
             apiService.move(currentCamera.getId(), 0, 45).enqueue(commandCallback());
         });
 
-        prefs = AppPreferences.getInstance(requireContext());
-
         setPipModeLayout(false);
     }
 
@@ -214,17 +246,36 @@ public class LiveViewFragment extends Fragment {
     }
 
     @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (fragmentView != null) {
+            setOrientationLayout(newConfig.orientation);
+        }
+    }
+
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode);
+        if (fragmentView != null) {
+            setPipModeLayout(isInPictureInPictureMode);
+        }
+    }
+
+    @Override
     public void onAttach(@NonNull Context context) {
         super.onAttach(context);
 
         if (context instanceof OnPrivacyChangeListener) {
             privacyListener = (OnPrivacyChangeListener) context;
+        } else if (getActivity() instanceof OnPrivacyChangeListener) {
+            // Nested inside LiveContainerFragment: fall back to the host activity.
+            privacyListener = (OnPrivacyChangeListener) getActivity();
         } else {
             throw new RuntimeException("Activity must implement OnPrivacyChangeListener");
         }
     }
 
-    public void setOrientationLayout(int orientation) {
+    private void setOrientationLayout(int orientation) {
         FrameLayout frameLayout = fragmentView.findViewById(R.id.frameLayout);
         View ptzButtons = fragmentView.findViewById(R.id.ptz_buttons);
 
@@ -265,6 +316,9 @@ public class LiveViewFragment extends Fragment {
 
         currentCamera.setPrivacy(privacy);
         privacyListener.onPrivacyChanged(currentCamera, privacy);
+
+        // Privacy hides the pip/volume/recalibrate actions — refresh the menu.
+        requireActivity().invalidateOptionsMenu();
     }
 
     private void takeSnapshot() {
@@ -338,7 +392,7 @@ public class LiveViewFragment extends Fragment {
         }
     }
 
-    public void setPipModeLayout(boolean enabled) {
+    private void setPipModeLayout(boolean enabled) {
         if (enabled) {
             fragmentView.findViewById(R.id.frameLayout).setLayoutParams(
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0.0F)

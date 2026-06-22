@@ -230,9 +230,17 @@ public class TimelineView extends View {
             case MotionEvent.ACTION_DOWN:
                 _isScaling = false;
                 removeCallbacks(_selectedRunnable);
+                // The timeline owns horizontal drags (scrubbing); stop an
+                // enclosing ViewPager2 from stealing them to change camera.
+                if (getParent() != null) {
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                }
                 break;
             case MotionEvent.ACTION_CANCEL:
             case MotionEvent.ACTION_UP:
+                if (getParent() != null) {
+                    getParent().requestDisallowInterceptTouchEvent(false);
+                }
                 if (!_isScaling) {
                     removeCallbacks(_selectingRunnable);
                     removeCallbacks(_selectedRunnable);

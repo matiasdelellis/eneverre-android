@@ -96,7 +96,7 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
     public void onCameraClick(Camera camera, int position) {
         Location location = locations.get(camera.getLocation());
 
-        Intent liveIntent = new Intent(CamerasActivity.this, LiveViewActivity.class);
+        Intent liveIntent = new Intent(CamerasActivity.this, ViewActivity.class);
         liveIntent.putExtra(LOCATION_CAMERAS_DATA, location);
         liveIntent.putExtra(SELECTED_CAMERA_DATA, position);
         liveViewLauncher.launch(liveIntent);

@@ -4,22 +4,22 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 
-import ar.com.delellis.eneverre.LiveViewFragment;
+import ar.com.delellis.eneverre.PlaybackFragment;
 import ar.com.delellis.eneverre.model.Location;
 
-public class CameraPagerAdapter extends FragmentStateAdapter {
+public class PlaybackPagerAdapter extends FragmentStateAdapter {
 
     private final Location location;
 
-    public CameraPagerAdapter(@NonNull Fragment fragment, Location cameraList) {
+    public PlaybackPagerAdapter(@NonNull Fragment fragment, Location location) {
         super(fragment);
-        this.location = cameraList;
+        this.location = location;
     }
 
     @NonNull
     @Override
     public Fragment createFragment(int position) {
-        return LiveViewFragment.newInstance(location.getCameras().get(position));
+        return PlaybackFragment.newInstance(location.getCameras().get(position));
     }
 
     @Override

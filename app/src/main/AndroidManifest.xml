@@ -16,7 +16,7 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
         <activity
-            android:name=".LiveViewActivity"
+            android:name=".ViewActivity"
             android:exported="false"
             android:supportsPictureInPicture="true"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"/>
@@ -28,10 +28,6 @@
             android:exported="false" />
         <activity
             android:name=".AboutActivity"
-            android:exported="false" />
-        <activity
-            android:name=".PlaybackActivity"
-            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:exported="false" />
         <activity
             android:name=".SplashActivity"

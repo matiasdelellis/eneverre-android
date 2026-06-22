@@ -70,37 +70,6 @@
 
         </FrameLayout>
 
-        <LinearLayout
-            android:id="@+id/go_playback_button"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:padding="12dp"
-            android:background="?attr/selectableItemBackground">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_replay_24"
-                app:tint="?attr/colorOnSurface" />
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:paddingHorizontal="12dp"
-                android:text="@string/reproduction_and_events"
-                android:textAppearance="?attr/textAppearanceButton"
-                android:gravity="center"/>
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_chevron_right_24"
-                app:tint="?attr/colorOnSurface" />
-        </LinearLayout>
-
         <RelativeLayout
             android:id="@+id/ptz_buttons"
             android:layout_width="match_parent"

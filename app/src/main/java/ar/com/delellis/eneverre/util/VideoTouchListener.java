@@ -31,17 +31,21 @@ public class VideoTouchListener implements View.OnTouchListener {
     @Override
     @SuppressLint("ClickableViewAccessibility")
     public boolean onTouch(View v, MotionEvent event) {
-        v.getParent().requestDisallowInterceptTouchEvent(true);
-
         switch (event.getAction() & MotionEvent.ACTION_MASK) {
             case MotionEvent.ACTION_DOWN:
                 lastEvent.set(event.getRawX(), event.getRawY());
                 touchMode = DRAG;
+                // Only hijack the gesture from an enclosing pager when the video
+                // is zoomed in (and there is therefore something to pan).
+                // Otherwise let the ViewPager2 receive the swipe to change camera.
+                v.getParent().requestDisallowInterceptTouchEvent(currentScale > 1f);
                 break;
             case MotionEvent.ACTION_POINTER_DOWN:
                 lastDistance = getPinchDistance(event);
                 if (lastDistance > 10f) {
                     touchMode = ZOOM;
+                    // A pinch is starting: keep the gesture for ourselves.
+                    v.getParent().requestDisallowInterceptTouchEvent(true);
                 }
                 break;
             case MotionEvent.ACTION_UP:
@@ -50,6 +54,11 @@ public class VideoTouchListener implements View.OnTouchListener {
                 break;
             case MotionEvent.ACTION_MOVE:
                 if (touchMode == DRAG) {
+                    if (currentScale <= 1f) {
+                        // Not zoomed: nothing to pan; let the pager handle paging.
+                        break;
+                    }
+                    v.getParent().requestDisallowInterceptTouchEvent(true);
                     float dx = (event.getRawX() - lastEvent.x) / currentScale;
                     int scrollX = vlcVideoLayout.getScrollX() - (int) dx;
                     scrollX = clamp(scrollX, -maxScrollX, maxScrollX);
