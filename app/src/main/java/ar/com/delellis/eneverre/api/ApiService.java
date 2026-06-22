@@ -10,33 +10,32 @@ import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.http.Body;
 import retrofit2.http.GET;
-import retrofit2.http.Header;
 import retrofit2.http.POST;
 import retrofit2.http.Path;
 import retrofit2.http.Query;
 
 public interface ApiService {
     @GET("cameras")
-    Call<List<Camera>> cameras(@Header("Authorization") String authorization);
+    Call<List<Camera>> cameras();
 
     @POST("camera/{device_id}/ptz/home")
-    Call<Void> home(@Header("Authorization") String authorization, @Path("device_id") String device_id);
+    Call<Void> home(@Path("device_id") String device_id);
 
     @POST("camera/{device_id}/ptz/move")
-    Call<Void> move(@Header("Authorization") String authorization, @Path("device_id") String device_id, @Query("x") int x, @Query("y") int y);
+    Call<Void> move(@Path("device_id") String device_id, @Query("x") int x, @Query("y") int y);
 
     @POST("camera/{device_id}/ptz/recalibrate")
-    Call<Void> recalibrate(@Header("Authorization") String authorization, @Path("device_id") String device_id);
+    Call<Void> recalibrate(@Path("device_id") String device_id);
 
     @POST("camera/{device_id}/privacy")
-    Call<Void> privacy(@Header("Authorization") String authorization, @Path("device_id") String device_id, @Query("enable") boolean enable);
+    Call<Void> privacy(@Path("device_id") String device_id, @Query("enable") boolean enable);
 
     @GET("camera/{device_id}/playback/list")
-    Call<List<Recording>> recordings(@Header("Authorization") String authorization, @Path("device_id") String device_id, @Query("start") String start, @Query("end") String end);
+    Call<List<Recording>> recordings(@Path("device_id") String device_id, @Query("start") String start, @Query("end") String end);
 
     @GET("camera/{device_id}/playback/get")
-    Call<ResponseBody> recording(@Header("Authorization") String authorization, @Path("device_id") String device_id, @Query("start") String start, @Query("duration") double duration);
+    Call<ResponseBody> recording(@Path("device_id") String device_id, @Query("start") String start, @Query("duration") double duration);
 
     @POST("auth/device/verify")
-    Call<VerifyStatus> device_verify(@Header("Authorization") String authorization, @Body UserCode userCode);
+    Call<VerifyStatus> device_verify(@Body UserCode userCode);
 }

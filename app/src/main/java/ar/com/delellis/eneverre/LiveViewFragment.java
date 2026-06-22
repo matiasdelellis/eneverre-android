@@ -24,7 +24,6 @@ import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.fragment.app.Fragment;
 
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -51,6 +50,8 @@ import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.player.VlcPlayer;
+import ar.com.delellis.eneverre.util.ApiCallback;
+import ar.com.delellis.eneverre.util.ApiError;
 import ar.com.delellis.eneverre.util.AppPreferences;
 import ar.com.delellis.eneverre.util.Download;
 import ar.com.delellis.eneverre.util.SharePreviewDialog;
@@ -59,12 +60,8 @@ import ar.com.delellis.eneverre.util.Time;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
 
 import okhttp3.ResponseBody;
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
 
 public class LiveViewFragment extends Fragment {
-    private static final String TAG = "LiveViewFragment";
 
     private static final String ARG_CURRENT_CAMERA = "current_camera";
 
@@ -74,7 +71,6 @@ public class LiveViewFragment extends Fragment {
 
     private Camera currentCamera;
 
-    private ApiClient apiClient = null;
     private ApiService apiService = null;
 
     private OnPrivacyChangeListener privacyListener;
@@ -115,7 +111,6 @@ public class LiveViewFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         fragmentView = view;
 
-        apiClient = ApiClient.getInstance();
         apiService = ApiClient.getApiService();
 
         int orientation = getResources().getConfiguration().orientation;
@@ -172,28 +167,23 @@ public class LiveViewFragment extends Fragment {
         });
 
         view.findViewById(R.id.ptz_home_button).setOnClickListener(v -> {
-            Call<Void> homeCall = apiService.home(apiClient.getAuthorization(), currentCamera.getId());
-            homeCall.enqueue(new VoidPtzCallback());
+            apiService.home(currentCamera.getId()).enqueue(commandCallback());
         });
 
         view.findViewById(R.id.ptz_left_button).setOnClickListener(v -> {
-            Call<Void> leftCall = apiService.move(apiClient.getAuthorization(), currentCamera.getId(), -45, 0);
-            leftCall.enqueue(new VoidPtzCallback());
+            apiService.move(currentCamera.getId(), -45, 0).enqueue(commandCallback());
         });
 
         view.findViewById(R.id.ptz_right_button).setOnClickListener(v -> {
-            Call<Void> rightCall = apiService.move(apiClient.getAuthorization(), currentCamera.getId(), 45, 0);
-            rightCall.enqueue(new VoidPtzCallback());
+            apiService.move(currentCamera.getId(), 45, 0).enqueue(commandCallback());
         });
 
         view.findViewById(R.id.ptz_up_button).setOnClickListener(v -> {
-            Call<Void> upCall = apiService.move(apiClient.getAuthorization(), currentCamera.getId(), 0, -45);
-            upCall.enqueue(new VoidPtzCallback());
+            apiService.move(currentCamera.getId(), 0, -45).enqueue(commandCallback());
         });
 
         view.findViewById(R.id.ptz_down_button).setOnClickListener(v -> {
-            Call<Void> downCall = apiService.move(apiClient.getAuthorization(), currentCamera.getId(), 0, 45);
-            downCall.enqueue(new VoidPtzCallback());
+            apiService.move(currentCamera.getId(), 0, 45).enqueue(commandCallback());
         });
 
         prefs = AppPreferences.getInstance(requireContext());
@@ -270,8 +260,7 @@ public class LiveViewFragment extends Fragment {
             fragmentView.findViewById(R.id.ptz_right_button).setEnabled(!privacy);
         }
 
-        Call<Void> privacyCall = apiService.privacy(apiClient.getAuthorization(), currentCamera.getId(), privacy);
-        privacyCall.enqueue(new VoidPtzCallback());
+        apiService.privacy(currentCamera.getId(), privacy).enqueue(commandCallback());
 
         currentCamera.setPrivacy(privacy);
         privacyListener.onPrivacyChanged(currentCamera, privacy);
@@ -436,48 +425,46 @@ public class LiveViewFragment extends Fragment {
     }
 
     private void downloadPlayback(long startRecord, double duration) {
-        ApiClient apiClient = ApiClient.getInstance();
-        ApiService apiService = ApiClient.getApiService();
-
         String startDownload = Time.MStoRFC3339(startRecord);
 
-        Call<ResponseBody> recordingCall = apiService.recording(apiClient.getAuthorization(), currentCamera.getId(), startDownload, duration);
-        recordingCall.enqueue(new Callback<ResponseBody>() {
+        apiService.recording(currentCamera.getId(), startDownload, duration).enqueue(new ApiCallback<ResponseBody>(requireContext()) {
             @Override
-            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
-                if (!response.isSuccessful()) {
-                    Toast.makeText(requireContext(), R.string.error_download, LENGTH_LONG).show();
+            public void onSuccess(ResponseBody body) {
+                if (body == null) {
+                    onError(ApiError.NO_HTTP_CODE, null);
                     return;
                 }
 
                 String dateTime = Time.MStoFriendlyURL(startRecord);
                 File downloadFile = Download.getDownloadFile(currentCamera.getId(), dateTime,"mp4");
                 try {
-                    Download.writeFile(requireContext(), downloadFile, response.body().bytes());
+                    Download.writeFile(requireContext(), downloadFile, body.bytes());
                     requireActivity().runOnUiThread(() -> {
                         SharePreviewDialog.show(requireContext(), Uri.parse(downloadFile.getPath()), "video/mp4", currentCamera.getName(), startBitmap, (long) duration);
                     });
                 } catch (IOException e) {
-                    Toast.makeText(requireContext(), R.string.error_download, LENGTH_LONG).show();
+                    onError(ApiError.NO_HTTP_CODE, null);
                 }
             }
 
             @Override
-            public void onFailure(Call<ResponseBody> call, Throwable throwable) {
+            public void onError(int httpCode, String message) {
                 Toast.makeText(requireContext(), R.string.error_download, LENGTH_LONG).show();
             }
         });
     }
 
-    private static class VoidPtzCallback implements Callback<Void> {
-        @Override
-        public void onResponse(Call<Void> call, Response<Void> response) {
-            Log.i(TAG, "Apply ptz");
-        }
-        @Override
-        public void onFailure(Call<Void> call, Throwable throwable) {
-            Log.e(TAG, "Fail to apply ptz");
-        }
+    /**
+     * Callback for fire-and-forget commands (PTZ, privacy) whose response body is
+     * empty. Success needs no action; failures surface a message via {@link ApiCallback}.
+     */
+    private ApiCallback<Void> commandCallback() {
+        return new ApiCallback<Void>(requireContext()) {
+            @Override
+            public void onSuccess(Void body) {
+                // Nothing to do: the command was accepted.
+            }
+        };
     }
 
     public interface OnPrivacyChangeListener {

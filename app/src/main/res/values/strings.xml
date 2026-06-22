@@ -28,6 +28,10 @@
     <string name="error_download">Failed to download the playback</string>
     <string name="error_snapshot">Failed to take camera snapshot</string>
     <string name="error_get_recordings">Failed to get camera recordings</string>
+    <string name="error_network">No network connection</string>
+    <string name="error_unauthorized">Invalid username or password</string>
+    <string name="error_server">The server reported an error</string>
+    <string name="error_unexpected">Unexpected error</string>
     <string name="there_is_no_recording">There is no recording</string>
     <string name="about_eneverre">About Eneverre…</string>
     <string name="privacy_enabled">Privacy mode enabled</string>

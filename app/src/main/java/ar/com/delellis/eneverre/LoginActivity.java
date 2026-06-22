@@ -19,12 +19,9 @@ import java.net.URL;
 import java.util.List;
 
 import ar.com.delellis.eneverre.api.ApiClient;
-import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.Camera;
+import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.SecureStore;
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
 
 public class LoginActivity extends AppCompatActivity {
     private static final String TAG = "LoginActivity";
@@ -103,22 +100,11 @@ public class LoginActivity extends AppCompatActivity {
         progressBar.setVisibility(VISIBLE);
         logingButton.setEnabled(false);
 
-        ApiClient apiClient = ApiClient.getInstance(host, username, password);
-        ApiService apiService = ApiClient.getApiService();
+        ApiClient.getInstance(host, username, password);
 
-        Call<List<Camera>> cameraListCall = apiService.cameras(apiClient.getAuthorization());
-        cameraListCall.enqueue(new Callback<List<Camera>>() {
+        ApiClient.getApiService().cameras().enqueue(new ApiCallback<List<Camera>>(this) {
             @Override
-            public void onResponse(Call<List<Camera>> call, Response<List<Camera>> response) {
-                List<Camera> cameras = response.body();
-                if (!response.isSuccessful() || cameras == null) {
-                    Log.e(TAG, "Login failed: " + response.code());
-                    Toast.makeText(LoginActivity.this, R.string.login_failed, Toast.LENGTH_LONG).show();
-                    progressBar.setVisibility(GONE);
-                    logingButton.setEnabled(true);
-                    return;
-                }
-
+            public void onSuccess(List<Camera> cameras) {
                 Log.i(TAG, "Valid login: Saving credentials");
                 secureStore.setConfigHost(host);
                 secureStore.setConfigUsername(username);
@@ -132,9 +118,8 @@ public class LoginActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onFailure(Call<List<Camera>> call, Throwable throwable) {
-                // TODO: Show dialog with message
-                Log.e(TAG, throwable.toString());
+            public void onError(int httpCode, String message) {
+                Toast.makeText(LoginActivity.this, message, Toast.LENGTH_LONG).show();
                 progressBar.setVisibility(GONE);
                 logingButton.setEnabled(true);
             }

@@ -2,7 +2,6 @@ package ar.com.delellis.eneverre;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.util.Log;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -11,13 +10,10 @@ import java.util.List;
 
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.model.Camera;
+import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.SecureStore;
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
 
 public class SplashActivity extends AppCompatActivity {
-    private static final String TAG = "SplashActivity";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -30,28 +26,24 @@ public class SplashActivity extends AppCompatActivity {
             return;
         }
 
-        ApiClient apiClient = ApiClient.getInstance(
+        ApiClient.getInstance(
                 secureStore.getConfigHost(),
                 secureStore.getConfigUsername(),
                 secureStore.getConfigPassword()
         );
 
-        Call<List<Camera>> camerasCall = ApiClient.getApiService().cameras(apiClient.getAuthorization());
-        camerasCall.enqueue(new Callback<List<Camera>>() {
+        ApiClient.getApiService().cameras().enqueue(new ApiCallback<List<Camera>>(this) {
             @Override
-            public void onResponse(Call<List<Camera>> call, Response<List<Camera>> response) {
-                List<Camera> cameras = response.body();
-                if (!response.isSuccessful() || cameras == null) {
-                    Log.e(TAG, "Invalid cameras response: " + response.code());
+            public void onSuccess(List<Camera> cameras) {
+                if (cameras == null) {
                     goToLoginActivicy();
                     return;
                 }
                 goToCamerasActivity(cameras);
             }
             @Override
-            public void onFailure(Call<List<Camera>> call, Throwable throwable) {
-                // TODO: Show dialog with message
-                Log.e(TAG, throwable.toString());
+            public void onError(int httpCode, String message) {
+                // Stored credentials no longer work (or no network): re-authenticate.
                 goToLoginActivicy();
             }
         });

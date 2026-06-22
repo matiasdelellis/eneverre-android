@@ -4,7 +4,6 @@ import static android.widget.Toast.LENGTH_LONG;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -20,19 +19,16 @@ import java.util.List;
 import ar.com.delellis.eneverre.adapter.LocationsAdapter;
 import ar.com.delellis.eneverre.adapter.OnCameraClickListener;
 import ar.com.delellis.eneverre.api.ApiClient;
-import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.UserCode;
 import ar.com.delellis.eneverre.api.model.VerifyStatus;
 import ar.com.delellis.eneverre.model.Location;
 import ar.com.delellis.eneverre.model.Locations;
+import ar.com.delellis.eneverre.util.ApiCallback;
+import ar.com.delellis.eneverre.util.ApiError;
 import ar.com.delellis.eneverre.util.UserCodePickerDialog;
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
 
 public class CamerasActivity extends AppCompatActivity implements OnCameraClickListener {
-    private static final String TAG = "CamerasActivity";
 
     private static final int INTENT_LIVE_VIEW = 100;
 
@@ -107,19 +103,13 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
     }
 
     private void onUserCodeRequest(String user_code) {
-        ApiClient apiClient = ApiClient.getInstance();
-        ApiService apiService = ApiClient.getApiService();
-
         UserCode userCode = new UserCode(user_code);
 
-        Call<VerifyStatus> verifyStatusCall = apiService.device_verify(apiClient.getAuthorization(), userCode);
-        verifyStatusCall.enqueue(new Callback<VerifyStatus>() {
+        ApiClient.getApiService().device_verify(userCode).enqueue(new ApiCallback<VerifyStatus>(this) {
             @Override
-            public void onResponse(Call<VerifyStatus> call, Response<VerifyStatus> response) {
-                VerifyStatus verifyStatus = response.body();
-                if (!response.isSuccessful() || verifyStatus == null) {
-                    Log.e(TAG, "Device verify failed: " + response.code());
-                    Toast.makeText(CamerasActivity.this, R.string.device_linking_failed, LENGTH_LONG).show();
+            public void onSuccess(VerifyStatus verifyStatus) {
+                if (verifyStatus == null) {
+                    onError(ApiError.NO_HTTP_CODE, null);
                     return;
                 }
 
@@ -133,9 +123,8 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
                 }
             }
             @Override
-            public void onFailure(Call<VerifyStatus> call, Throwable throwable) {
-                Log.e(TAG, "onUserCodeRequest onFailure: " + throwable.getMessage());
-                Toast.makeText(CamerasActivity.this, getString(R.string.device_linking_failed), LENGTH_LONG).show();
+            public void onError(int httpCode, String message) {
+                Toast.makeText(CamerasActivity.this, R.string.device_linking_failed, LENGTH_LONG).show();
             }
         });
     }

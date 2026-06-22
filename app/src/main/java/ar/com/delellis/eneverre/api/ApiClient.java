@@ -5,6 +5,9 @@ import android.util.Base64;
 import java.net.MalformedURLException;
 import java.net.URL;
 
+import ar.com.delellis.eneverre.BuildConfig;
+import okhttp3.OkHttpClient;
+import okhttp3.logging.HttpLoggingInterceptor;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
@@ -33,8 +36,23 @@ public class ApiClient {
         this.username = username;
         this.password = password;
 
+        // Attach the Basic auth header to every request so call sites don't have to.
+        OkHttpClient.Builder httpClient = new OkHttpClient.Builder();
+        httpClient.addInterceptor(chain -> chain.proceed(
+                chain.request().newBuilder()
+                        .header("Authorization", getAuthorization())
+                        .build()));
+
+        if (BuildConfig.DEBUG) {
+            HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
+            // BASIC: request line + response status only — avoids logging credentials.
+            logging.setLevel(HttpLoggingInterceptor.Level.BASIC);
+            httpClient.addInterceptor(logging);
+        }
+
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(getApiBase())
+                .client(httpClient.build())
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
         apiService = retrofit.create(ApiService.class);
@@ -57,7 +75,7 @@ public class ApiClient {
         return apiService;
     }
 
-    public String getAuthorization() {
+    private String getAuthorization() {
         String credentials = getCredentials();
         return "Basic " + Base64.encodeToString(credentials.getBytes(), Base64.URL_SAFE|Base64.NO_WRAP);
     }

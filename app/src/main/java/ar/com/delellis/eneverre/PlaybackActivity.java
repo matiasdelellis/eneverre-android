@@ -43,10 +43,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 import ar.com.delellis.eneverre.api.ApiClient;
-import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.Recording;
 import ar.com.delellis.eneverre.player.VlcPlayer;
+import ar.com.delellis.eneverre.util.ApiCallback;
+import ar.com.delellis.eneverre.util.ApiError;
 import ar.com.delellis.eneverre.util.AppPreferences;
 import ar.com.delellis.eneverre.util.DateTimePickerDialog;
 import ar.com.delellis.eneverre.util.Download;
@@ -57,9 +58,6 @@ import ar.com.delellis.eneverre.util.VideoTouchListener;
 import ar.com.delellis.eneverre.widget.TimelineView;
 import ar.com.delellis.eneverre.widget.TimelineView.TimeRecord;
 import okhttp3.ResponseBody;
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
 
 public class PlaybackActivity extends AppCompatActivity {
 
@@ -353,50 +351,37 @@ public class PlaybackActivity extends AppCompatActivity {
     }
 
     private void downloadPlayback(String startRFC333, double duration) {
-        ApiClient apiClient = ApiClient.getInstance();
-        ApiService apiService = ApiClient.getApiService();
-
-        Call<ResponseBody> recordingCall = apiService.recording(apiClient.getAuthorization(), currentCamera.getId(), startRFC333, duration);
-        recordingCall.enqueue(new Callback<ResponseBody>() {
+        ApiClient.getApiService().recording(currentCamera.getId(), startRFC333, duration).enqueue(new ApiCallback<ResponseBody>(this) {
             @Override
-            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
-                if (!response.isSuccessful()) {
-                    Toast.makeText(PlaybackActivity.this, R.string.error_download, LENGTH_LONG).show();
+            public void onSuccess(ResponseBody body) {
+                if (body == null) {
+                    onError(ApiError.NO_HTTP_CODE, null);
                     return;
                 }
 
                 String dateTime = Time.MStoFriendlyURL(timelineView.getCurrent());
                 File downloadFile = Download.getDownloadFile(currentCamera.getId(), dateTime,"mp4");
                 try {
-                    Download.writeFile(PlaybackActivity.this, downloadFile, response.body().bytes());
+                    Download.writeFile(PlaybackActivity.this, downloadFile, body.bytes());
                     SharePreviewDialog.show(PlaybackActivity.this, Uri.parse(downloadFile.getPath()), "video/mp4", currentCamera.getName(), null, (long) duration);
                 } catch (IOException e) {
-                    Toast.makeText(PlaybackActivity.this, R.string.error_download, LENGTH_LONG).show();
+                    onError(ApiError.NO_HTTP_CODE, null);
                 }
             }
 
             @Override
-            public void onFailure(Call<ResponseBody> call, Throwable throwable) {
+            public void onError(int httpCode, String message) {
                 Toast.makeText(PlaybackActivity.this, R.string.error_download, LENGTH_LONG).show();
             }
         });
     }
 
     private void getRecordings(long since, long to, long selectTime) {
-        ApiClient apiClient = ApiClient.getInstance();
-        ApiService apiService = ApiClient.getApiService();
-
-        Call<List<Recording>> playbackCall = apiService.recordings(apiClient.getAuthorization(), currentCamera.getId(), Time.MStoRFC3339(since), Time.MStoRFC3339(to));
-        playbackCall.enqueue(new Callback<List<Recording>>() {
+        ApiClient.getApiService().recordings(currentCamera.getId(), Time.MStoRFC3339(since), Time.MStoRFC3339(to)).enqueue(new ApiCallback<List<Recording>>(this) {
             @Override
-            public void onResponse(Call<List<Recording>> call, Response<List<Recording>> response) {
-                recordings = response.body();
-                if (!response.isSuccessful() || recordings == null) {
-                    Log.e(TAG, "Invalid recordings response: " + response.code());
-                    Toast.makeText(PlaybackActivity.this, R.string.error_get_recordings, LENGTH_LONG).show();
-                    return;
-                }
-                if (recordings.isEmpty()) {
+            public void onSuccess(List<Recording> body) {
+                recordings = body;
+                if (recordings == null || recordings.isEmpty()) {
                     Toast.makeText(PlaybackActivity.this, R.string.there_is_no_recording, LENGTH_LONG).show();
                     return;
                 }
@@ -434,9 +419,8 @@ public class PlaybackActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onFailure(Call<List<Recording>> call, Throwable throwable) {
+            public void onError(int httpCode, String message) {
                 Toast.makeText(PlaybackActivity.this, R.string.error_get_recordings, LENGTH_LONG).show();
-                Log.e(TAG, throwable.toString());
             }
         });
     }
