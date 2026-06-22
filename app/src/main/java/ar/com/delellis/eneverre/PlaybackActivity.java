@@ -391,6 +391,15 @@ public class PlaybackActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call<List<Recording>> call, Response<List<Recording>> response) {
                 recordings = response.body();
+                if (!response.isSuccessful() || recordings == null) {
+                    Log.e(TAG, "Invalid recordings response: " + response.code());
+                    Toast.makeText(PlaybackActivity.this, R.string.error_get_recordings, LENGTH_LONG).show();
+                    return;
+                }
+                if (recordings.isEmpty()) {
+                    Toast.makeText(PlaybackActivity.this, R.string.there_is_no_recording, LENGTH_LONG).show();
+                    return;
+                }
 
                 Log.i(TAG, "Recording list size: " + recordings.size());
 

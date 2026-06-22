@@ -9,6 +9,7 @@ import android.util.Log;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -110,6 +111,13 @@ public class LoginActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call<List<Camera>> call, Response<List<Camera>> response) {
                 List<Camera> cameras = response.body();
+                if (!response.isSuccessful() || cameras == null) {
+                    Log.e(TAG, "Login failed: " + response.code());
+                    Toast.makeText(LoginActivity.this, R.string.login_failed, Toast.LENGTH_LONG).show();
+                    progressBar.setVisibility(GONE);
+                    logingButton.setEnabled(true);
+                    return;
+                }
 
                 Log.i(TAG, "Valid login: Saving credentials");
                 secureStore.setConfigHost(host);

@@ -41,6 +41,11 @@ public class SplashActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call<List<Camera>> call, Response<List<Camera>> response) {
                 List<Camera> cameras = response.body();
+                if (!response.isSuccessful() || cameras == null) {
+                    Log.e(TAG, "Invalid cameras response: " + response.code());
+                    goToLoginActivicy();
+                    return;
+                }
                 goToCamerasActivity(cameras);
             }
             @Override

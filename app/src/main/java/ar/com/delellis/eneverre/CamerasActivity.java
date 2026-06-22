@@ -116,8 +116,14 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
         verifyStatusCall.enqueue(new Callback<VerifyStatus>() {
             @Override
             public void onResponse(Call<VerifyStatus> call, Response<VerifyStatus> response) {
-                // TODO: Check error code
-                String status = response.body().getStatus();
+                VerifyStatus verifyStatus = response.body();
+                if (!response.isSuccessful() || verifyStatus == null) {
+                    Log.e(TAG, "Device verify failed: " + response.code());
+                    Toast.makeText(CamerasActivity.this, R.string.device_linking_failed, LENGTH_LONG).show();
+                    return;
+                }
+
+                String status = verifyStatus.getStatus();
                 if ("approved".equals(status)) {
                     Toast.makeText(CamerasActivity.this, R.string.approved_device, LENGTH_LONG).show();
                 } else if ("expired".equals(status)) {
