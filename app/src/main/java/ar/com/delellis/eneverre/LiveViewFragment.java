@@ -20,7 +20,6 @@ import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
-import androidx.core.content.FileProvider;
 import androidx.fragment.app.Fragment;
 
 import android.view.LayoutInflater;
@@ -38,12 +37,6 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.util.VLCVideoLayout;
 
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
 
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.ApiService;
@@ -53,7 +46,6 @@ import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
 import ar.com.delellis.eneverre.util.AppPreferences;
 import ar.com.delellis.eneverre.util.Download;
-import ar.com.delellis.eneverre.util.SharePreviewDialog;
 import ar.com.delellis.eneverre.util.Snapshot;
 import ar.com.delellis.eneverre.util.Time;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
@@ -270,26 +262,8 @@ public class LiveViewFragment extends Fragment {
         Snapshot.getSurfaceBitmap(surfaceView, new Snapshot.PixelCopyListener() {
             @Override
             public void onSurfaceBitmapReady(Bitmap bitmap) {
-                File snapshotFile = Download.getDownloadFile(currentCamera.getName(), Time.MStoFriendlyURL(System.currentTimeMillis()), "png");
-                try {
-                    OutputStream out = new BufferedOutputStream(new FileOutputStream(snapshotFile));
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 0, out);
-                    out.flush();
-
-                    Uri uriSnapshot = FileProvider.getUriForFile(
-                            requireContext(),
-                            BuildConfig.APPLICATION_ID + ".fileprovider",
-                            snapshotFile
-                    );
-
-                    requireActivity().runOnUiThread(() -> {
-                        SharePreviewDialog.show(requireContext(), uriSnapshot, "image/png", currentCamera.getName(), bitmap, -1);
-                    });
-                } catch (FileNotFoundException e) {
-                    Toast.makeText(requireContext(), R.string.error_snapshot, LENGTH_LONG).show();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+                String fileName = Download.buildFileName(currentCamera.getName(), Time.MStoFriendlyURL(System.currentTimeMillis()), "png");
+                Download.saveSnapshotAndShare(requireActivity(), bitmap, fileName, currentCamera.getName());
             }
             @Override
             public void onSurfaceBitmapError(int errorCode) {
@@ -435,15 +409,8 @@ public class LiveViewFragment extends Fragment {
                 }
 
                 String dateTime = Time.MStoFriendlyURL(startRecord);
-                File downloadFile = Download.getDownloadFile(currentCamera.getId(), dateTime,"mp4");
-                try {
-                    Download.writeFile(requireContext(), downloadFile, body.bytes());
-                    requireActivity().runOnUiThread(() -> {
-                        SharePreviewDialog.show(requireContext(), Uri.parse(downloadFile.getPath()), "video/mp4", currentCamera.getName(), startBitmap, (long) duration);
-                    });
-                } catch (IOException e) {
-                    onError(ApiError.NO_HTTP_CODE, null);
-                }
+                String fileName = Download.buildFileName(currentCamera.getId(), dateTime, "mp4");
+                Download.saveClipAndShare(requireActivity(), body, fileName, currentCamera.getName(), startBitmap, (long) duration);
             }
 
             @Override

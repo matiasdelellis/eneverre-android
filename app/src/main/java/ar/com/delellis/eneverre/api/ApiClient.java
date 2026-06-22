@@ -90,6 +90,15 @@ public class ApiClient {
         return this.protocol + this.baseUrl + "/api/";
     }
 
+    /**
+     * Builds a playback URL with the credentials embedded inline
+     * ({@code user:pass@host}) because VLC fetches the stream directly.
+     *
+     * <p><b>Security:</b> the returned string contains plaintext credentials.
+     * Never log it, put it in a crash report, or expose it to other apps. It is
+     * handed straight to {@code VlcPlayer.playUri()} (libVLC runs with
+     * {@code --quiet}, so it is not written to the VLC log either).
+     */
     public String getPlaybackUrl(String device_id, String start, double duration) {
         if (this.port > 0) {
             return this.protocol + getCredentials() + "@" + this.baseUrl + ":" + this.port + "/api/camera/" + device_id + "/playback/get?start=" + start + "&duration=" + duration;
