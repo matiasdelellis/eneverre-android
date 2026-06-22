@@ -12,22 +12,21 @@ import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
 public class ApiClient {
-    private String protocol = null;
-    private String baseUrl = null;
-    private int port = -1;
-    private String username = null;
-    private String password = null;
+    private final String protocol;
+    private final String baseUrl;
+    private final int port;
+    private final String username;
+    private final String password;
+    private final ApiService apiService;
 
-    private static ApiService apiService = null;
-    private static ApiClient apiClient = null;
+    private static ApiClient instance = null;
 
     private ApiClient(String url, String username, String password) {
-        URL host = null;
+        URL host;
         try {
             host = new URL(url);
         } catch (MalformedURLException e) {
-            // Nothing...
-            return;
+            throw new IllegalArgumentException("Invalid API host URL: " + url, e);
         }
 
         this.protocol = host.getProtocol() + "://";
@@ -55,24 +54,28 @@ public class ApiClient {
                 .client(httpClient.build())
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
-        apiService = retrofit.create(ApiService.class);
+        this.apiService = retrofit.create(ApiService.class);
     }
 
-    public static ApiClient getInstance (String url, String username, String password) {
-        if (apiClient != null) {
-            // TODO: Thrown if initialized or maybe clean it.
+    /**
+     * (Re)initializes the client with the given credentials. Throws
+     * {@link IllegalArgumentException} if the URL is malformed.
+     */
+    public static synchronized ApiClient getInstance(String url, String username, String password) {
+        instance = new ApiClient(url, username, password);
+        return instance;
+    }
+
+    /** @throws IllegalStateException if {@link #getInstance(String, String, String)} was never called. */
+    public static synchronized ApiClient getInstance() {
+        if (instance == null) {
+            throw new IllegalStateException("ApiClient is not initialized; call getInstance(url, username, password) first.");
         }
-        apiClient = new ApiClient(url, username, password);
-        return apiClient;
-    }
-
-    public static ApiClient getInstance() {
-        // TODO: Thrown if not initialized..
-        return apiClient;
+        return instance;
     }
 
     public static ApiService getApiService() {
-        return apiService;
+        return getInstance().apiService;
     }
 
     private String getAuthorization() {

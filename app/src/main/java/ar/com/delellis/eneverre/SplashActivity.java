@@ -26,11 +26,17 @@ public class SplashActivity extends AppCompatActivity {
             return;
         }
 
-        ApiClient.getInstance(
-                secureStore.getConfigHost(),
-                secureStore.getConfigUsername(),
-                secureStore.getConfigPassword()
-        );
+        try {
+            ApiClient.getInstance(
+                    secureStore.getConfigHost(),
+                    secureStore.getConfigUsername(),
+                    secureStore.getConfigPassword()
+            );
+        } catch (IllegalArgumentException e) {
+            // Stored host is unusable: re-authenticate.
+            goToLoginActivicy();
+            return;
+        }
 
         ApiClient.getApiService().cameras().enqueue(new ApiCallback<List<Camera>>(this) {
             @Override
