@@ -50,6 +50,7 @@ import ar.com.delellis.eneverre.player.VlcPlayer;
 import ar.com.delellis.eneverre.util.AppPreferences;
 import ar.com.delellis.eneverre.util.DateTimePickerDialog;
 import ar.com.delellis.eneverre.util.Download;
+import ar.com.delellis.eneverre.util.SharePreviewDialog;
 import ar.com.delellis.eneverre.util.Snapshot;
 import ar.com.delellis.eneverre.util.Time;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
@@ -367,8 +368,8 @@ public class PlaybackActivity extends AppCompatActivity {
                 String dateTime = Time.MStoFriendlyURL(timelineView.getCurrent());
                 File downloadFile = Download.getDownloadFile(currentCamera.getId(), dateTime,"mp4");
                 try {
-                    Download.writeFile(response.body().bytes(), downloadFile);
-                    Download.share(PlaybackActivity.this, Uri.parse(downloadFile.getPath()), currentCamera.getName(), "video/mp4");
+                    Download.writeFile(PlaybackActivity.this, downloadFile, response.body().bytes());
+                    SharePreviewDialog.show(PlaybackActivity.this, Uri.parse(downloadFile.getPath()), "video/mp4", currentCamera.getName(), null, (long) duration);
                 } catch (IOException e) {
                     Toast.makeText(PlaybackActivity.this, R.string.error_download, LENGTH_LONG).show();
                 }
@@ -440,7 +441,7 @@ public class PlaybackActivity extends AppCompatActivity {
                 try {
                     OutputStream out = new BufferedOutputStream(new FileOutputStream(snapshotFile));
                     bitmap.compress(Bitmap.CompressFormat.PNG, 0, out);
-                    Download.share(PlaybackActivity.this, Uri.parse(snapshotFile.getPath()), currentCamera.getName(), "image/png");
+                    SharePreviewDialog.show(PlaybackActivity.this, Uri.parse(snapshotFile.getPath()), "image/png", currentCamera.getName(), bitmap, -1);
                 } catch (FileNotFoundException e) {
                     Toast.makeText(PlaybackActivity.this, R.string.error_snapshot, LENGTH_LONG).show();
                 }

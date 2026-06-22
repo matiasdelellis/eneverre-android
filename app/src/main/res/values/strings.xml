@@ -48,4 +48,7 @@
     <string name="approved_device">Approved device</string>
     <string name="the_code_has_expired">The code has expired</string>
     <string name="invalid_user_code">Invalid user code</string>
+    <string name="share">Share</string>
+    <string name="download">Download</string>
+    <string name="open">Open</string>
 </resources>

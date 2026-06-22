@@ -21,6 +21,7 @@ import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.fragment.app.Fragment;
 
 import android.util.Log;
@@ -52,6 +53,7 @@ import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.player.VlcPlayer;
 import ar.com.delellis.eneverre.util.AppPreferences;
 import ar.com.delellis.eneverre.util.Download;
+import ar.com.delellis.eneverre.util.SharePreviewDialog;
 import ar.com.delellis.eneverre.util.Snapshot;
 import ar.com.delellis.eneverre.util.Time;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
@@ -78,6 +80,7 @@ public class LiveViewFragment extends Fragment {
     private OnPrivacyChangeListener privacyListener;
 
     private long startRecord = -1;
+    private Bitmap startBitmap;
 
     AppPreferences prefs = null;
 
@@ -156,30 +159,10 @@ public class LiveViewFragment extends Fragment {
 
         view.findViewById(R.id.record_button).setVisibility(VISIBLE);
         view.findViewById(R.id.record_button).setOnClickListener(v -> {
-            FloatingActionButton fab = (FloatingActionButton) v;
-            if (startRecord < 0) {
-                startRecord = System.currentTimeMillis();
-
-                fab.setImageResource(R.drawable.ic_stop_circle_24);
-                int color = ContextCompat.getColor(fab.getContext(), R.color.record_red);
-                fab.setImageTintList(ColorStateList.valueOf(color));
-                Toast.makeText(requireContext(), getString(R.string.starting_recording), LENGTH_SHORT).show();
+            if (!isRecording()) {
+                startLiveRecord();
             } else {
-                long _startRecord = startRecord;
-                long stopRecord = System.currentTimeMillis();
-                double duration = (double) (stopRecord - _startRecord) / 1000.0;
-
-                fragmentView.postDelayed(() -> {
-                    downloadPlayback(_startRecord, duration);
-                }, 2500);
-
-                fab.setImageResource(R.drawable.ic_video_cam_24);
-                int color = MaterialColors.getColor(
-                        fab,
-                        com.google.android.material.R.attr.colorOnSecondaryContainer);
-                fab.setImageTintList(ColorStateList.valueOf(color));
-                Toast.makeText(requireContext(), R.string.recording_downloaded_soon, LENGTH_LONG).show();
-                startRecord = -1L;
+                downloadLiveRecord();
             }
         });
 
@@ -303,9 +286,21 @@ public class LiveViewFragment extends Fragment {
                 try {
                     OutputStream out = new BufferedOutputStream(new FileOutputStream(snapshotFile));
                     bitmap.compress(Bitmap.CompressFormat.PNG, 0, out);
-                    Download.share(requireContext(), Uri.parse(snapshotFile.getPath()), currentCamera.getName(), "image/png");
+                    out.flush();
+
+                    Uri uriSnapshot = FileProvider.getUriForFile(
+                            requireContext(),
+                            BuildConfig.APPLICATION_ID + ".fileprovider",
+                            snapshotFile
+                    );
+
+                    requireActivity().runOnUiThread(() -> {
+                        SharePreviewDialog.show(requireContext(), uriSnapshot, "image/png", currentCamera.getName(), bitmap, -1);
+                    });
                 } catch (FileNotFoundException e) {
                     Toast.makeText(requireContext(), R.string.error_snapshot, LENGTH_LONG).show();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
                 }
             }
             @Override
@@ -392,6 +387,54 @@ public class LiveViewFragment extends Fragment {
         }
     }
 
+    private boolean isRecording() {
+        return startRecord > 0;
+    }
+
+    private void startLiveRecord() {
+        FloatingActionButton fab = fragmentView.findViewById(R.id.record_button);
+
+        fab.setImageResource(R.drawable.ic_stop_circle_24);
+        int color = ContextCompat.getColor(fab.getContext(), R.color.record_red);
+        fab.setImageTintList(ColorStateList.valueOf(color));
+
+        SurfaceView surfaceView = fragmentView.findViewById(org.videolan.R.id.surface_video);
+        Snapshot.getSurfaceBitmap(surfaceView, new Snapshot.PixelCopyListener() {
+            @Override
+            public void onSurfaceBitmapReady(Bitmap bitmap) {
+                startBitmap = bitmap;
+            }
+            @Override
+            public void onSurfaceBitmapError(int errorCode) {
+                startBitmap = null;
+            }
+        });
+
+        startRecord = System.currentTimeMillis();
+        Toast.makeText(requireContext(), getString(R.string.starting_recording), LENGTH_SHORT).show();
+    }
+
+    private void downloadLiveRecord() {
+        long _startRecord = startRecord;
+        long stopRecord = System.currentTimeMillis();
+
+        fragmentView.postDelayed(() -> {
+            double duration = (double) (stopRecord - _startRecord) / 1000.0;
+            downloadPlayback(_startRecord, duration);
+        }, 2500);
+
+        FloatingActionButton fab = fragmentView.findViewById(R.id.record_button);
+        fab.setImageResource(R.drawable.ic_video_cam_24);
+        int color = MaterialColors.getColor(
+                fab,
+                com.google.android.material.R.attr.colorOnSecondaryContainer);
+        fab.setImageTintList(ColorStateList.valueOf(color));
+
+        Toast.makeText(requireContext(), R.string.recording_downloaded_soon, LENGTH_LONG).show();
+
+        startRecord = -1L;
+    }
+
     private void downloadPlayback(long startRecord, double duration) {
         ApiClient apiClient = ApiClient.getInstance();
         ApiService apiService = ApiClient.getApiService();
@@ -410,8 +453,10 @@ public class LiveViewFragment extends Fragment {
                 String dateTime = Time.MStoFriendlyURL(startRecord);
                 File downloadFile = Download.getDownloadFile(currentCamera.getId(), dateTime,"mp4");
                 try {
-                    Download.writeFile(response.body().bytes(), downloadFile);
-                    Download.share(requireContext(), Uri.parse(downloadFile.getPath()), currentCamera.getName(), "video/mp4");
+                    Download.writeFile(requireContext(), downloadFile, response.body().bytes());
+                    requireActivity().runOnUiThread(() -> {
+                        SharePreviewDialog.show(requireContext(), Uri.parse(downloadFile.getPath()), "video/mp4", currentCamera.getName(), startBitmap, (long) duration);
+                    });
                 } catch (IOException e) {
                     Toast.makeText(requireContext(), R.string.error_download, LENGTH_LONG).show();
                 }
