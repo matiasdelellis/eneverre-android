@@ -27,6 +27,7 @@ public class SplashActivity extends AppCompatActivity {
         SecureStore secureStore = SecureStore.getInstance(this);
         if (!secureStore.hasCredentials()) {
             goToLoginActivicy();
+            return;
         }
 
         ApiClient apiClient = ApiClient.getInstance(
