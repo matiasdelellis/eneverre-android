@@ -9,6 +9,8 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -30,8 +32,6 @@ import ar.com.delellis.eneverre.util.UserCodePickerDialog;
 
 public class CamerasActivity extends AppCompatActivity implements OnCameraClickListener {
 
-    private static final int INTENT_LIVE_VIEW = 100;
-
     public static final String RAW_CAMERAS_LIST_DATA = "RAW_CAMERA_LIST";
     public static final String LOCATION_CAMERAS_DATA = "LOCATION_CAMERAS";
 
@@ -40,6 +40,15 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
     private Locations locations = null;
 
     private LocationsAdapter locationsAdapter = null;
+
+    private final ActivityResultLauncher<Intent> liveViewLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    Location location = (Location) result.getData().getSerializableExtra(LOCATION_CAMERAS_DATA);
+                    // TODO: Update privacy icons.
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,15 +67,6 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
         locations = new Locations(cameraList);
         locationsAdapter = new LocationsAdapter(this, locations, this);
         recyclerView.setAdapter(locationsAdapter);
-    }
-
-    @Override
-    protected void onActivityResult (int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == INTENT_LIVE_VIEW && resultCode == RESULT_OK) {
-            Location location = (Location) data.getSerializableExtra(LOCATION_CAMERAS_DATA);
-            // TODO: Update privacy icons.
-        }
     }
 
     @Override
@@ -99,7 +99,7 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
         Intent liveIntent = new Intent(CamerasActivity.this, LiveViewActivity.class);
         liveIntent.putExtra(LOCATION_CAMERAS_DATA, location);
         liveIntent.putExtra(SELECTED_CAMERA_DATA, position);
-        startActivityForResult(liveIntent, INTENT_LIVE_VIEW);
+        liveViewLauncher.launch(liveIntent);
     }
 
     private void onUserCodeRequest(String user_code) {

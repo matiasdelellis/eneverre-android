@@ -5,7 +5,6 @@ import static android.view.View.VISIBLE;
 import static android.widget.Toast.LENGTH_LONG;
 import static android.widget.Toast.LENGTH_SHORT;
 
-import static ar.com.delellis.eneverre.PlaybackActivity.INTENT_PLAYBACK_VIEW;
 
 import android.content.Context;
 import android.content.Intent;
@@ -128,7 +127,7 @@ public class LiveViewFragment extends Fragment {
         view.findViewById(R.id.go_playback_button).setOnClickListener(v -> {
             Intent goIntent = new Intent(requireActivity(), PlaybackActivity.class);
             goIntent.putExtra(LiveViewActivity.CURRENT_CAMERA_DATA, currentCamera);
-            startActivityForResult(goIntent, INTENT_PLAYBACK_VIEW);
+            startActivity(goIntent);
         });
 
         view.findViewById(R.id.reconnect_button).setVisibility(GONE);

@@ -61,8 +61,6 @@ import okhttp3.ResponseBody;
 
 public class PlaybackActivity extends AppCompatActivity {
 
-    public static final int INTENT_PLAYBACK_VIEW = 200;
-
     private static final String TAG = "PlaybackActivity";
 
     private VlcPlayer vlcPlayer = null;
@@ -252,19 +250,8 @@ public class PlaybackActivity extends AppCompatActivity {
 
     @Override
     public boolean onSupportNavigateUp() {
-        Intent intent = new Intent();
-        setResult(RESULT_OK, intent);
         finish();
         return true;
-    }
-
-    @Override
-    public void onBackPressed() {
-        Intent intent = new Intent();
-        setResult(RESULT_OK, intent);
-        finish();
-
-        super.onBackPressed();
     }
 
     @Override

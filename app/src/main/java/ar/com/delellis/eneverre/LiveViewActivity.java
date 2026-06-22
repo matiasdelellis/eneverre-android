@@ -17,6 +17,7 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -77,12 +78,21 @@ public class LiveViewActivity extends AppCompatActivity implements LiveViewFragm
         if (liveMuted) {
             muteLive(liveMuted);
         }
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                finishWithResult();
+            }
+        });
     }
 
     @Override
-    protected void onActivityResult (int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
+    protected void onResume() {
+        super.onResume();
 
+        // Re-sync the mute state when returning to the foreground (e.g. from
+        // playback), in case the global mute preference changed elsewhere.
         if (liveMuted != prefs.isGlobalMute()) {
             muteLive(!liveMuted);
             invalidateOptionsMenu();
@@ -91,22 +101,15 @@ public class LiveViewActivity extends AppCompatActivity implements LiveViewFragm
 
     @Override
     public boolean onSupportNavigateUp() {
-        Intent intent = new Intent();
-        intent.putExtra(CamerasActivity.LOCATION_CAMERAS_DATA, location);
-        setResult(RESULT_OK, intent);
-        finish();
-
+        finishWithResult();
         return true;
     }
 
-    @Override
-    public void onBackPressed() {
+    private void finishWithResult() {
         Intent intent = new Intent();
         intent.putExtra(CamerasActivity.LOCATION_CAMERAS_DATA, location);
         setResult(RESULT_OK, intent);
         finish();
-
-        super.onBackPressed();
     }
 
     @Override
