@@ -204,6 +204,16 @@ public class LiveViewFragment extends Fragment {
     }
 
     @Override
+    public void onDestroyView() {
+        // Safety net: onPause keeps the player alive while in Picture-in-Picture
+        // so it keeps streaming in the mini-window. When that window is then
+        // dismissed the activity is torn down without another onPause, so this
+        // is the only place that guarantees the native player is released.
+        stopLive(false);
+        super.onDestroyView();
+    }
+
+    @Override
     public void onAttach(@NonNull Context context) {
         super.onAttach(context);
 
