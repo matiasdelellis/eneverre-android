@@ -54,6 +54,19 @@ public class VideoTouchListener implements View.OnTouchListener {
                 longPressActive = true;
                 longPressListener.onLongPressStart();
             }
+
+            @Override
+            public boolean onDoubleTap(MotionEvent e) {
+                // Toggle between fit (1x) and 2x, centering the zoom on the tapped
+                // point. Any in-progress hold is cancelled so it doesn't stick.
+                endLongPress();
+                if (currentScale > 1f) {
+                    applyScale(1f, e.getX(), e.getY());
+                } else {
+                    applyScale(2f, e.getX(), e.getY());
+                }
+                return true;
+            }
         });
     }
 
@@ -108,41 +121,58 @@ public class VideoTouchListener implements View.OnTouchListener {
                     }
                     v.getParent().requestDisallowInterceptTouchEvent(true);
                     float dx = (event.getRawX() - lastEvent.x) / currentScale;
-                    int scrollX = vlcVideoLayout.getScrollX() - (int) dx;
-                    scrollX = clamp(scrollX, -maxScrollX, maxScrollX);
-                    vlcVideoLayout.setScrollX(scrollX);
-
                     float dy = (event.getRawY() - lastEvent.y) / currentScale;
-                    int scrrollY = vlcVideoLayout.getScrollY() - (int) dy;
-                    scrrollY = clamp(scrrollY, -maxScrollY, maxScrollY);
-                    vlcVideoLayout.setScrollY(scrrollY);
+                    vlcVideoLayout.setScrollX(vlcVideoLayout.getScrollX() - (int) dx);
+                    vlcVideoLayout.setScrollY(vlcVideoLayout.getScrollY() - (int) dy);
+                    clampScroll();
 
                     lastEvent.set(event.getRawX(), event.getRawY());
                 } else if (touchMode == ZOOM) {
                     float newDistance = getPinchDistance(event);
-                    float calcScale = (newDistance / lastDistance);
-
-                    calcScale = vlcVideoLayout.getScaleX() * calcScale;
-                    currentScale = clamp(calcScale, 1.0f, 9f);
-
-                    vlcVideoLayout.setScaleX(currentScale);
-                    vlcVideoLayout.setScaleY(currentScale);
-
-                    // D'Oh!. Took me a week to discover this math.
-                    maxScrollX = (int) ((currentScale - 1f) * vlcVideoLayout.getWidth() / (2 * currentScale));
-                    maxScrollY = (int) ((currentScale - 1f) * vlcVideoLayout.getHeight() / (2 * currentScale));
-
-                    int scrollX = clamp(vlcVideoLayout.getScrollX(), -maxScrollX, maxScrollX);
-                    vlcVideoLayout.setScrollX(scrollX);
-
-                    int scrollY = clamp(vlcVideoLayout.getScrollY(), -maxScrollY, maxScrollY);
-                    vlcVideoLayout.setScrollY(scrollY);
+                    setScale(vlcVideoLayout.getScaleX() * (newDistance / lastDistance));
+                    clampScroll();
                 }
                 break;
             default:
                 break;
         }
         return true;
+    }
+
+    /**
+     * Applies the clamped scale to the layout and recomputes the pan bounds.
+     * The caller is responsible for positioning (and clamping) the scroll.
+     */
+    private void setScale(float scale) {
+        currentScale = clamp(scale, 1.0f, 9f);
+
+        vlcVideoLayout.setScaleX(currentScale);
+        vlcVideoLayout.setScaleY(currentScale);
+
+        // D'Oh!. Took me a week to discover this math.
+        maxScrollX = (int) ((currentScale - 1f) * vlcVideoLayout.getWidth() / (2 * currentScale));
+        maxScrollY = (int) ((currentScale - 1f) * vlcVideoLayout.getHeight() / (2 * currentScale));
+    }
+
+    /** Clamps the current pan to the bounds computed by {@link #setScale}. */
+    private void clampScroll() {
+        vlcVideoLayout.setScrollX(clamp(vlcVideoLayout.getScrollX(), -maxScrollX, maxScrollX));
+        vlcVideoLayout.setScrollY(clamp(vlcVideoLayout.getScrollY(), -maxScrollY, maxScrollY));
+    }
+
+    /**
+     * Sets the video scale, centering on the given view-local point, and keeps
+     * the pan within bounds. The pager keeps the gesture only while zoomed in.
+     */
+    private void applyScale(float scale, float focusX, float focusY) {
+        setScale(scale);
+
+        float factor = (currentScale - 1f) / currentScale;
+        vlcVideoLayout.setScrollX((int) ((focusX - vlcVideoLayout.getWidth() / 2f) * factor));
+        vlcVideoLayout.setScrollY((int) ((focusY - vlcVideoLayout.getHeight() / 2f) * factor));
+        clampScroll();
+
+        vlcVideoLayout.getParent().requestDisallowInterceptTouchEvent(currentScale > 1f);
     }
 
     private float getPinchDistance(MotionEvent event) {
