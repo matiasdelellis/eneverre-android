@@ -66,8 +66,7 @@
         <RelativeLayout
             android:id="@+id/ptz_buttons"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_marginBottom="96dp">
+            android:layout_height="match_parent">
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/ptz_home_button"
