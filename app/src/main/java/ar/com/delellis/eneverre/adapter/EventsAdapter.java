@@ -51,9 +51,11 @@ public class EventsAdapter extends RecyclerView.Adapter<EventsAdapterHolder> {
     public void onBindViewHolder(@NonNull EventsAdapterHolder holder, int position) {
         Event event = events.get(position);
         long startMsec = Time.RFC3339toMS(event.getStartTs());
+        long endMsec = Time.RFC3339toMS(event.getEndTs());
 
         holder.setType(typeLabel(event.getType()));
         holder.setTime(friendlyTime(startMsec));
+        holder.setDuration(friendlyDuration(startMsec, endMsec));
         holder.setHighlighted(event.getId() == highlightedEventId);
 
         holder.itemView.setOnClickListener(v -> {
@@ -112,5 +114,22 @@ public class EventsAdapter extends RecyclerView.Adapter<EventsAdapterHolder> {
 
         String day = DateFormat.getMediumDateFormat(context).format(date);
         return day + ", " + time;
+    }
+
+    /** Clock-style event length ("0:05", "1:23", "1:02:03"); empty if unknown. */
+    private String friendlyDuration(long startMsec, long endMsec) {
+        if (startMsec <= 0 || endMsec <= startMsec) {
+            return "";
+        }
+
+        long totalSec = (endMsec - startMsec) / 1000;
+        long hours = totalSec / 3600;
+        long minutes = (totalSec % 3600) / 60;
+        long seconds = totalSec % 60;
+
+        if (hours > 0) {
+            return String.format(Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds);
+        }
+        return String.format(Locale.getDefault(), "%d:%02d", minutes, seconds);
     }
 }

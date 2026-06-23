@@ -52,4 +52,13 @@
             tools:text="Today, 13:18:17" />
     </LinearLayout>
 
+    <TextView
+        android:id="@+id/event_duration"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:maxLines="1"
+        android:textColor="@android:color/darker_gray"
+        tools:text="0:05" />
+
 </LinearLayout>
