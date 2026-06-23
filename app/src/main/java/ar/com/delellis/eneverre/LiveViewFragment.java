@@ -11,8 +11,6 @@ import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 
@@ -27,7 +25,6 @@ import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
@@ -98,7 +95,7 @@ public class LiveViewFragment extends Fragment {
             int itemId = item.getItemId();
             if (itemId == R.id.privacy_action) {
                 setVideoPrivacyLayout(true);
-                stopLive(true);
+                stopLive();
                 return true;
             } else if (itemId == R.id.pip_action) {
                 ((ViewActivity) requireActivity()).enterPipMode(currentCamera);
@@ -230,7 +227,7 @@ public class LiveViewFragment extends Fragment {
         super.onPause();
 
         if (!requireActivity().isInPictureInPictureMode()) {
-            stopLive(false);
+            stopLive();
         }
     }
 
@@ -240,7 +237,7 @@ public class LiveViewFragment extends Fragment {
         // so it keeps streaming in the mini-window. When that window is then
         // dismissed the activity is torn down without another onPause, so this
         // is the only place that guarantees the native player is released.
-        stopLive(false);
+        stopLive();
         super.onDestroyView();
     }
 
@@ -302,6 +299,11 @@ public class LiveViewFragment extends Fragment {
 
         fragmentView.findViewById(R.id.exit_privacy_button).setVisibility(privacy ? VISIBLE : GONE);
 
+        // Black overlay hides the last (frozen) frame while privacy is on, instead
+        // of blanking the VLC surface (that lockCanvas blank left the video narrow
+        // when leaving privacy because it changed the surface buffer geometry).
+        fragmentView.findViewById(R.id.privacy_cover).setVisibility(privacy ? VISIBLE : GONE);
+
         if (currentCamera.getPtz()) {
             fragmentView.findViewById(R.id.ptz_up_button).setEnabled(!privacy);
             fragmentView.findViewById(R.id.ptz_down_button).setEnabled(!privacy);
@@ -360,27 +362,12 @@ public class LiveViewFragment extends Fragment {
         vlcPlayer.playUri(Uri.parse(videoUrl));
     }
 
-    public void stopLive(boolean clearView) {
+    public void stopLive() {
         if (vlcPlayer != null) {
             vlcPlayer.stop();
             vlcPlayer.detachViews();
             vlcPlayer.release();
             vlcPlayer = null;
-        }
-
-        /*
-         * FIXME: This works, but it changes the size of the canvas?.
-         * The video is smaller than before.... but when you zoom in, it has much better quality.
-         * I must investigate whether it can be used.
-         */
-        if (clearView) {
-            SurfaceView surfaceView = fragmentView.findViewById(org.videolan.R.id.surface_video);
-            if (surfaceView == null)
-                return;
-            SurfaceHolder holder = surfaceView.getHolder();
-            Canvas canvas = holder.lockCanvas();
-            canvas.drawColor(Color.BLACK);
-            holder.unlockCanvasAndPost(canvas);
         }
     }
 
