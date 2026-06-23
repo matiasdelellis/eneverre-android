@@ -3,6 +3,7 @@ package ar.com.delellis.eneverre.api;
 import java.util.List;
 
 import ar.com.delellis.eneverre.api.model.Camera;
+import ar.com.delellis.eneverre.api.model.EventsResponse;
 import ar.com.delellis.eneverre.api.model.Recording;
 import ar.com.delellis.eneverre.api.model.UserCode;
 import ar.com.delellis.eneverre.api.model.VerifyStatus;
@@ -35,6 +36,9 @@ public interface ApiService {
 
     @GET("camera/{device_id}/playback/get")
     Call<ResponseBody> recording(@Path("device_id") String device_id, @Query("start") String start, @Query("duration") double duration);
+
+    @GET("cameras/{camera_id}/events")
+    Call<EventsResponse> events(@Path("camera_id") String camera_id, @Query("since") String since, @Query("until") String until);
 
     @POST("auth/device/verify")
     Call<VerifyStatus> device_verify(@Body UserCode userCode);

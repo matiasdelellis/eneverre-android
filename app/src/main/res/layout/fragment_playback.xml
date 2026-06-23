@@ -84,6 +84,66 @@
                 app:timelineColorText="?attr/colorOnPrimaryContainer"/>
         </FrameLayout>
 
+        <LinearLayout
+            android:id="@+id/events_panel"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/events_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="8dp"
+                android:text="@string/events"
+                android:textColor="?attr/colorPrimary"
+                android:textStyle="bold" />
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/events_recycler"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:paddingBottom="88dp"
+                    tools:listitem="@layout/item_event" />
+
+                <LinearLayout
+                    android:id="@+id/events_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:padding="24dp"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginBottom="12dp"
+                        android:alpha="0.5"
+                        android:contentDescription="@string/no_events"
+                        android:src="@drawable/ic_motion_24"
+                        app:tint="?android:attr/textColorSecondary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/no_events"
+                        android:textColor="?android:attr/textColorSecondary" />
+                </LinearLayout>
+            </FrameLayout>
+        </LinearLayout>
+
     </LinearLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

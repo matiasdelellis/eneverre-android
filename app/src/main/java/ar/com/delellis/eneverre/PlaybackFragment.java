@@ -27,6 +27,8 @@ import androidx.core.content.ContextCompat;
 import androidx.core.view.MenuProvider;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.Lifecycle;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.color.MaterialColors;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
@@ -35,10 +37,16 @@ import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.util.VLCVideoLayout;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
+import ar.com.delellis.eneverre.adapter.EventsAdapter;
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.model.Camera;
+import ar.com.delellis.eneverre.api.model.Event;
+import ar.com.delellis.eneverre.api.model.EventsResponse;
 import ar.com.delellis.eneverre.api.model.Recording;
 import ar.com.delellis.eneverre.player.VlcPlayer;
 import ar.com.delellis.eneverre.util.ApiCallback;
@@ -73,6 +81,12 @@ public class PlaybackFragment extends Fragment {
     private Camera currentCamera = null;
 
     private List<Recording> recordings = null;
+
+    private EventsAdapter eventsAdapter = null;
+    private final List<Event> events = new ArrayList<>();
+    private final Set<Long> eventIds = new HashSet<>();
+    private boolean hasEvents = false;
+    private boolean eventsLoaded = false;
 
     private long lastTimeSelected = 0L;
     private long lastLength = 0L;
@@ -243,6 +257,7 @@ public class PlaybackFragment extends Fragment {
 
                 long since = lastOldRecording - (24 * 60 * 60 * 1000L);
                 getRecordings(since, lastOldRecording, -1);
+                getEvents(since, lastOldRecording);
             }
 
             @Override
@@ -258,7 +273,10 @@ public class PlaybackFragment extends Fragment {
             }
         });
 
-        view.findViewById(R.id.timeline_frame).setVisibility(GONE);
+        eventsAdapter = new EventsAdapter(requireContext(), (event, startMsec) -> seekToEvent(startMsec));
+        RecyclerView eventsRecycler = view.findViewById(R.id.events_recycler);
+        eventsRecycler.setLayoutManager(new LinearLayoutManager(requireContext()));
+        eventsRecycler.setAdapter(eventsAdapter);
 
         requireActivity().addMenuProvider(playbackMenu, getViewLifecycleOwner(), Lifecycle.State.RESUMED);
 
@@ -267,7 +285,15 @@ public class PlaybackFragment extends Fragment {
         long shared = sharedPlaybackTime();
         long select = shared > 0 ? shared : now - (5 * 1000L);
 
+        // When swiping in from another camera, position the timeline at the
+        // shared moment right away (instead of "now") so cameras stay in sync
+        // even before recordings finish loading.
+        if (shared > 0) {
+            timelineView.setCurrent(shared);
+        }
+
         getRecordings(yesterday, now, select);
+        getEvents(yesterday, now);
     }
 
     @Override
@@ -374,6 +400,7 @@ public class PlaybackFragment extends Fragment {
                     timelineSelecting = false;
                     lastTimeSelected = calendar.getTimeInMillis();
                     timelineView.setCurrent(lastTimeSelected);
+                    timelineView.invalidate();
 
                     String start = Time.MStoRFC3339(lastTimeSelected);
                     startPlayback(start, 30.0);
@@ -393,6 +420,8 @@ public class PlaybackFragment extends Fragment {
     private void setOrientationLayout(int orientation) {
         FrameLayout frameLayout = root.findViewById(R.id.frameLayout);
         FrameLayout timelineFrame = root.findViewById(R.id.timeline_frame);
+
+        updateEventsPanelVisibility(orientation);
 
         if (orientation == Configuration.ORIENTATION_PORTRAIT) {
             timelineFrame.setVisibility(VISIBLE);
@@ -466,8 +495,6 @@ public class PlaybackFragment extends Fragment {
                 Recording firstRecording = recordings.get(0);
                 lastOldRecording = Time.RFC3339toMS(firstRecording.getStart());
 
-                root.findViewById(R.id.timeline_frame).setVisibility(VISIBLE);
-
                 if (selectTime > 0) {
                     timelineView.setCurrent(selectTime);
                 }
@@ -478,6 +505,76 @@ public class PlaybackFragment extends Fragment {
                 Toast.makeText(requireContext(), R.string.error_get_recordings, LENGTH_LONG).show();
             }
         });
+    }
+
+    private void getEvents(long since, long until) {
+        ApiClient.getApiService().events(currentCamera.getId(), Time.MStoRFC3339(since), Time.MStoRFC3339(until)).enqueue(new ApiCallback<EventsResponse>(requireContext()) {
+            @Override
+            public void onSuccess(EventsResponse body) {
+                if (body == null || body.getEvents() == null) {
+                    return;
+                }
+
+                for (Event event : body.getEvents()) {
+                    if (eventIds.add(event.getId())) {
+                        events.add(event);
+                    }
+                }
+
+                // Newest first for the list.
+                Collections.sort(events, (a, b) -> Long.compare(
+                        Time.RFC3339toMS(b.getStartTs()), Time.RFC3339toMS(a.getStartTs())));
+
+                Log.i(TAG, "Event list size: " + events.size());
+
+                eventsAdapter.updateEvents(events);
+                renderEventsOnTimeline();
+
+                eventsLoaded = true;
+                hasEvents = !events.isEmpty();
+                updateEventsPanelVisibility(getResources().getConfiguration().orientation);
+            }
+
+            @Override
+            public void onError(int httpCode, String message) {
+                Toast.makeText(requireContext(), R.string.error_get_events, LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void renderEventsOnTimeline() {
+        ArrayList<TimeRecord> eventRecords = new ArrayList<TimeRecord>();
+        for (Event event : events) {
+            long startMs = Time.RFC3339toMS(event.getStartTs());
+            if (startMs <= 0) {
+                continue;
+            }
+            long endMs = Time.RFC3339toMS(event.getEndTs());
+            long durationMs = endMs > startMs ? endMs - startMs : 0;
+            eventRecords.add(new TimeRecord(startMs, durationMs, event));
+        }
+        timelineView.setMajor2Records(eventRecords);
+        timelineView.invalidate();
+    }
+
+    private void seekToEvent(long timeMs) {
+        timelineSelecting = false;
+        lastTimeSelected = timeMs;
+        if (timelineView != null) {
+            timelineView.setCurrent(timeMs);
+            timelineView.invalidate();
+        }
+        setSharedPlaybackTime(timeMs);
+        startPlayback(Time.MStoRFC3339(timeMs), 30.0);
+    }
+
+    private void updateEventsPanelVisibility(int orientation) {
+        boolean showPanel = orientation == Configuration.ORIENTATION_PORTRAIT && eventsLoaded;
+        root.findViewById(R.id.events_panel).setVisibility(showPanel ? VISIBLE : GONE);
+
+        // Within the panel, swap between the list and the empty state.
+        root.findViewById(R.id.events_recycler).setVisibility(hasEvents ? VISIBLE : GONE);
+        root.findViewById(R.id.events_empty).setVisibility(hasEvents ? GONE : VISIBLE);
     }
 
     private void takeSnapshot() {

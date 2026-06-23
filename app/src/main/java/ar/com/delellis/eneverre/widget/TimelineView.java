@@ -45,8 +45,8 @@ import ar.com.delellis.eneverre.util.Time;
 public class TimelineView extends View {
 
     public static final long INTERVAL_MIN_1   =            60 * 1000L; //  1 min
-    public static final long INTERVAL_HOUR_6  =   6 * 60 * 60 * 1000L; //  6 hours
-    public static final long INTERVAL_DAY_5   = 120 * 60 * 60 * 1000L; //  7 days
+    public static final long INTERVAL_HOUR_4  =   4 * 60 * 60 * 1000L; //  6 hours
+    public static final long INTERVAL_DAY_5   = 120 * 60 * 60 * 1000L; //  5 days
 
     public static final long ANIMATION_DURATION_MSEC = 150;
 
@@ -178,9 +178,9 @@ public class TimelineView extends View {
     private ValueAnimator _animator;
     private TimeDateFormatter _timedateFormatter = null; // Initialized in init()
 
-    private long _selectedMsec = 0;
-    private final Date _selectedMsecDate = new Date(0);
-    private long _intervalMsec = INTERVAL_HOUR_6;
+    private long _selectedMsec = System.currentTimeMillis();
+    private final Date _selectedMsecDate = new Date(_selectedMsec);
+    private long _intervalMsec = INTERVAL_HOUR_4;
     private int _gmtOffsetInMillis = 0;
     private final Rect _rect000000 = new Rect();
 

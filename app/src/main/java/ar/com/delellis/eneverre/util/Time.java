@@ -7,15 +7,23 @@ import java.util.Date;
 import java.util.Locale;
 
 public class Time {
-    public static long RFC3339toMS(String dateTime) {
-        SimpleDateFormat timeServerFormatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.US);
-        try {
-            timeServerFormatter.parse(dateTime);
-        } catch (ParseException e) {
-            return -1;
-        }
+    // RFC3339 with and without sub-second precision: recordings carry millis
+    // (".SSS"), the events endpoint reports whole seconds ("…T13:18:17Z").
+    private static final String[] RFC3339_PATTERNS = {
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+            "yyyy-MM-dd'T'HH:mm:ssXXX"
+    };
 
-        return timeServerFormatter.getCalendar().getTimeInMillis();
+    public static long RFC3339toMS(String dateTime) {
+        for (String pattern : RFC3339_PATTERNS) {
+            SimpleDateFormat formatter = new SimpleDateFormat(pattern, Locale.US);
+            try {
+                return formatter.parse(dateTime).getTime();
+            } catch (ParseException ignored) {
+                // Try the next pattern.
+            }
+        }
+        return -1;
     }
 
     public static String MStoRFC3339(long time) {

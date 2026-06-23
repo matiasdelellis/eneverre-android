@@ -35,6 +35,11 @@
     <string name="error_server">The server reported an error</string>
     <string name="error_unexpected">Unexpected error</string>
     <string name="there_is_no_recording">There is no recording</string>
+    <string name="events">Events</string>
+    <string name="event_motion">Movement</string>
+    <string name="event_unknown">Event</string>
+    <string name="no_events">There are no events for this camera</string>
+    <string name="error_get_events">Failed to get camera events</string>
     <string name="about_eneverre">About Eneverre…</string>
     <string name="title_about">About Eneverre</string>
     <string name="about_description">An Android client for the eneverre-api, which consolidates the camera streams from different manufacturers into a single application.</string>
