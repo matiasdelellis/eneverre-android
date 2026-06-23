@@ -153,7 +153,9 @@ public class LiveViewFragment extends Fragment {
         view.findViewById(R.id.reconnect_button).setVisibility(GONE);
         view.findViewById(R.id.exit_privacy_button).setVisibility(currentCamera.getPrivacy() ? VISIBLE : GONE);
         view.findViewById(R.id.loading_progress).setVisibility(currentCamera.getPrivacy() ? GONE : VISIBLE);
-        view.findViewById(R.id.ptz_buttons).setVisibility(currentCamera.getPtz() ? VISIBLE : GONE);
+        // PTZ controls stay on screen even when the camera lacks PTZ support, just
+        // disabled, so the live view doesn't look empty.
+        setPtzEnabled(currentCamera.getPtz());
 
         vlcVideoLayout = view.findViewById(R.id.vlc_video_Layout);
         vlcVideoLayout.setOnTouchListener(new VideoTouchListener(vlcVideoLayout));
@@ -276,7 +278,7 @@ public class LiveViewFragment extends Fragment {
         View ptzButtons = fragmentView.findViewById(R.id.ptz_buttons);
 
         if (orientation == Configuration.ORIENTATION_PORTRAIT) {
-            ptzButtons.setVisibility(currentCamera.getPtz() ? VISIBLE : GONE);
+            ptzButtons.setVisibility(VISIBLE);
 
             int screenWidth = Resources.getSystem().getDisplayMetrics().widthPixels;
             int videoWidth = currentCamera.getWidth();
@@ -304,13 +306,7 @@ public class LiveViewFragment extends Fragment {
         // when leaving privacy because it changed the surface buffer geometry).
         fragmentView.findViewById(R.id.privacy_cover).setVisibility(privacy ? VISIBLE : GONE);
 
-        if (currentCamera.getPtz()) {
-            fragmentView.findViewById(R.id.ptz_up_button).setEnabled(!privacy);
-            fragmentView.findViewById(R.id.ptz_down_button).setEnabled(!privacy);
-            fragmentView.findViewById(R.id.ptz_home_button).setEnabled(!privacy);
-            fragmentView.findViewById(R.id.ptz_left_button).setEnabled(!privacy);
-            fragmentView.findViewById(R.id.ptz_right_button).setEnabled(!privacy);
-        }
+        setPtzEnabled(currentCamera.getPtz() && !privacy);
 
         apiService.privacy(currentCamera.getId(), privacy).enqueue(commandCallback());
 
@@ -319,6 +315,20 @@ public class LiveViewFragment extends Fragment {
 
         // Privacy hides the pip/volume/recalibrate actions — refresh the menu.
         requireActivity().invalidateOptionsMenu();
+    }
+
+    /** Enables/disables the PTZ buttons, dimming them when disabled so they read as inactive. */
+    private void setPtzEnabled(boolean enabled) {
+        float alpha = enabled ? 1.0f : 0.4f;
+        int[] ids = {
+                R.id.ptz_home_button, R.id.ptz_up_button, R.id.ptz_down_button,
+                R.id.ptz_left_button, R.id.ptz_right_button
+        };
+        for (int id : ids) {
+            View button = fragmentView.findViewById(id);
+            button.setEnabled(enabled);
+            button.setAlpha(alpha);
+        }
     }
 
     private void takeSnapshot() {
@@ -382,15 +392,11 @@ public class LiveViewFragment extends Fragment {
             fragmentView.findViewById(R.id.frameLayout).setLayoutParams(
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0.0F)
             );
-            if (currentCamera.getPtz()) {
-                fragmentView.findViewById(R.id.ptz_buttons).setVisibility(GONE);
-            }
+            fragmentView.findViewById(R.id.ptz_buttons).setVisibility(GONE);
             fragmentView.findViewById(R.id.record_button).setVisibility(GONE);
             fragmentView.findViewById(R.id.take_snapshot).setVisibility(GONE);
         } else {
-            if (currentCamera.getPtz()) {
-                fragmentView.findViewById(R.id.ptz_buttons).setVisibility(VISIBLE);
-            }
+            fragmentView.findViewById(R.id.ptz_buttons).setVisibility(VISIBLE);
             fragmentView.findViewById(R.id.record_button).setVisibility(VISIBLE);
             fragmentView.findViewById(R.id.take_snapshot).setVisibility(VISIBLE);
         }
