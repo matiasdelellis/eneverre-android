@@ -166,6 +166,10 @@ public class PlaybackFragment extends Fragment {
                 long newTime = lastTimeSelected + (long) (lastLength * event.getPositionChanged());
                 timelineView.setCurrentWithAnimation(newTime);
 
+                // Follow the event the timeline marks as current (highlight while
+                // it plays, clear once playback moves past it).
+                syncEventHighlight();
+
                 // Keep the shared moment current so swiping to another camera
                 // resumes here regardless of pause/resume ordering.
                 if (viewResumed) {
@@ -246,6 +250,7 @@ public class PlaybackFragment extends Fragment {
                 timelineSelecting = false;
                 lastTimeSelected = l;
                 setSharedPlaybackTime(l);
+                syncEventHighlight();
 
                 startPlayback(Time.MStoRFC3339(lastTimeSelected), 10.0);
             }
@@ -274,7 +279,7 @@ public class PlaybackFragment extends Fragment {
             }
         });
 
-        eventsAdapter = new EventsAdapter(requireContext(), (event, startMsec) -> seekToEvent(startMsec));
+        eventsAdapter = new EventsAdapter(requireContext(), (event, startMsec) -> seekToEvent(event, startMsec));
         RecyclerView eventsRecycler = view.findViewById(R.id.events_recycler);
         eventsRecycler.setLayoutManager(new LinearLayoutManager(requireContext()));
         eventsRecycler.setAdapter(eventsAdapter);
@@ -402,6 +407,7 @@ public class PlaybackFragment extends Fragment {
                     lastTimeSelected = calendar.getTimeInMillis();
                     timelineView.setCurrent(lastTimeSelected);
                     timelineView.invalidate();
+                    syncEventHighlight();
 
                     String start = Time.MStoRFC3339(lastTimeSelected);
                     startPlayback(start, 30.0);
@@ -566,7 +572,7 @@ public class PlaybackFragment extends Fragment {
         timelineView.invalidate();
     }
 
-    private void seekToEvent(long timeMs) {
+    private void seekToEvent(Event event, long timeMs) {
         timelineSelecting = false;
         lastTimeSelected = timeMs;
         if (timelineView != null) {
@@ -574,7 +580,25 @@ public class PlaybackFragment extends Fragment {
             timelineView.invalidate();
         }
         setSharedPlaybackTime(timeMs);
+        syncEventHighlight();
+
         startPlayback(Time.MStoRFC3339(timeMs), 30.0);
+    }
+
+    /**
+     * Highlights in the list whichever event the timeline currently sits on
+     * (reusing its automatic event selection), or clears it when none. This
+     * keeps the highlight on while the event plays and drops it once playback
+     * moves past the event.
+     */
+    private void syncEventHighlight() {
+        if (eventsAdapter == null || timelineView == null) {
+            return;
+        }
+        TimeRecord record = timelineView.getCurrentMajor2Record();
+        long id = (record != null && record.object instanceof Event)
+                ? ((Event) record.object).getId() : -1L;
+        eventsAdapter.setHighlightedEventId(id);
     }
 
     private void updateEventsPanelVisibility(int orientation) {

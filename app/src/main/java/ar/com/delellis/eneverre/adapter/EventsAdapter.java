@@ -26,6 +26,8 @@ public class EventsAdapter extends RecyclerView.Adapter<EventsAdapterHolder> {
     private final List<Event> events = new ArrayList<>();
     private final OnEventClickListener listener;
 
+    private long highlightedEventId = -1L;
+
     private final SimpleDateFormat timeFormatter;
 
     public EventsAdapter(Context context, OnEventClickListener listener) {
@@ -52,6 +54,7 @@ public class EventsAdapter extends RecyclerView.Adapter<EventsAdapterHolder> {
 
         holder.setType(typeLabel(event.getType()));
         holder.setTime(friendlyTime(startMsec));
+        holder.setHighlighted(event.getId() == highlightedEventId);
 
         holder.itemView.setOnClickListener(v -> {
             if (listener != null && startMsec > 0) {
@@ -68,6 +71,15 @@ public class EventsAdapter extends RecyclerView.Adapter<EventsAdapterHolder> {
     public void updateEvents(List<Event> newEvents) {
         events.clear();
         events.addAll(newEvents);
+        notifyDataSetChanged();
+    }
+
+    /** Highlights the given event (or clears the highlight with -1). */
+    public void setHighlightedEventId(long eventId) {
+        if (highlightedEventId == eventId) {
+            return;
+        }
+        highlightedEventId = eventId;
         notifyDataSetChanged();
     }
 

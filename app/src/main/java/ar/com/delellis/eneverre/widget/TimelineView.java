@@ -519,6 +519,12 @@ public class TimelineView extends View {
         return getRecord(_selectedMsec, _recordsBackground);
     }
 
+    /** The Major2 (event) record under the current position, or null if none. */
+    @Nullable
+    public TimeRecord getCurrentMajor2Record() {
+        return getRecord(_selectedMsec, _recordsMajor2);
+    }
+
     @Nullable
     private static TimeRecord getNextRecord(long currentMsec, @NonNull ArrayList<TimeRecord> records) {
         TimeRecord prevRecord = null;

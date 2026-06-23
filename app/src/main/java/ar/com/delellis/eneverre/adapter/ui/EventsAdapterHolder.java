@@ -25,4 +25,8 @@ public class EventsAdapterHolder extends RecyclerView.ViewHolder {
     public void setTime(String time) {
         timeView.setText(time);
     }
+
+    public void setHighlighted(boolean highlighted) {
+        itemView.setActivated(highlighted);
+    }
 }
