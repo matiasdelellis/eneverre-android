@@ -117,7 +117,26 @@ public class PlaybackFragment extends Fragment {
         timelineView = view.findViewById(R.id.timeline_view);
 
         vlcVideoLayout = view.findViewById(R.id.vlc_playback_layout);
-        vlcVideoLayout.setOnTouchListener(new VideoTouchListener(vlcVideoLayout));
+        VideoTouchListener touchListener = new VideoTouchListener(vlcVideoLayout);
+        // Press and hold on the video to fast-forward at 2x; release to resume 1x.
+        touchListener.setOnLongPressListener(new VideoTouchListener.OnLongPressListener() {
+            @Override
+            public void onLongPressStart() {
+                if (vlcPlayer != null) {
+                    vlcPlayer.setRate(2.0f);
+                    root.findViewById(R.id.speed_badge).setVisibility(VISIBLE);
+                }
+            }
+
+            @Override
+            public void onLongPressEnd() {
+                if (vlcPlayer != null) {
+                    vlcPlayer.setRate(1.0f);
+                    root.findViewById(R.id.speed_badge).setVisibility(GONE);
+                }
+            }
+        });
+        vlcVideoLayout.setOnTouchListener(touchListener);
 
         vlcPlayer = new VlcPlayer(requireContext());
         vlcPlayer.setEventListener(event -> {

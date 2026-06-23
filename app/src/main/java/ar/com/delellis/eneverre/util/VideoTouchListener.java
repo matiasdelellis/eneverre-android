@@ -4,12 +4,19 @@ import static java.lang.Math.clamp;
 
 import android.annotation.SuppressLint;
 import android.graphics.PointF;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 
 import org.videolan.libvlc.util.VLCVideoLayout;
 
 public class VideoTouchListener implements View.OnTouchListener {
+
+    /** Notified when the user presses and holds on the video, and when they release. */
+    public interface OnLongPressListener {
+        void onLongPressStart();
+        void onLongPressEnd();
+    }
 
     private static final int NONE = 0;
     private static final int DRAG = 1;
@@ -24,13 +31,50 @@ public class VideoTouchListener implements View.OnTouchListener {
 
     private final VLCVideoLayout vlcVideoLayout;
 
+    private final GestureDetector gestureDetector;
+    private OnLongPressListener longPressListener = null;
+    private boolean longPressActive = false;
+
     public VideoTouchListener(VLCVideoLayout view) {
         vlcVideoLayout = view;
+        gestureDetector = new GestureDetector(view.getContext(), new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onDown(MotionEvent e) {
+                return true;
+            }
+
+            @Override
+            public void onLongPress(MotionEvent e) {
+                // A still single-finger hold is the fast-forward gesture; ignore
+                // it while pinching. The detector already cancels it if the finger
+                // moves (drag-to-pan / swipe-to-page), so those don't trigger it.
+                if (touchMode == ZOOM || longPressListener == null) {
+                    return;
+                }
+                longPressActive = true;
+                longPressListener.onLongPressStart();
+            }
+        });
+    }
+
+    public void setOnLongPressListener(OnLongPressListener listener) {
+        longPressListener = listener;
+    }
+
+    private void endLongPress() {
+        if (longPressActive) {
+            longPressActive = false;
+            if (longPressListener != null) {
+                longPressListener.onLongPressEnd();
+            }
+        }
     }
 
     @Override
     @SuppressLint("ClickableViewAccessibility")
     public boolean onTouch(View v, MotionEvent event) {
+        gestureDetector.onTouchEvent(event);
+
         switch (event.getAction() & MotionEvent.ACTION_MASK) {
             case MotionEvent.ACTION_DOWN:
                 lastEvent.set(event.getRawX(), event.getRawY());
@@ -44,13 +88,17 @@ public class VideoTouchListener implements View.OnTouchListener {
                 lastDistance = getPinchDistance(event);
                 if (lastDistance > 10f) {
                     touchMode = ZOOM;
-                    // A pinch is starting: keep the gesture for ourselves.
+                    // A pinch is starting: keep the gesture for ourselves, and
+                    // cancel any in-progress hold so it doesn't stick at 2x.
                     v.getParent().requestDisallowInterceptTouchEvent(true);
+                    endLongPress();
                 }
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_POINTER_UP:
+            case MotionEvent.ACTION_CANCEL:
                 touchMode = NONE;
+                endLongPress();
                 break;
             case MotionEvent.ACTION_MOVE:
                 if (touchMode == DRAG) {

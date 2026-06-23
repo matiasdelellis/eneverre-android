@@ -96,4 +96,9 @@ public class VlcPlayer {
         this.volume = volume;
         mediaPlayer.setVolume(volume);
     }
+
+    /** Sets the playback speed (1.0 = normal, 2.0 = double). */
+    public void setRate(float rate) {
+        mediaPlayer.setRate(rate);
+    }
 }

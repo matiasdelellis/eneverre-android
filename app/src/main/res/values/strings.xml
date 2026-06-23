@@ -21,6 +21,7 @@
     <string name="exit_privacy_mode">Exit privacy mode</string>
     <string name="picture_in_picture">Picture in Picture</string>
     <string name="playback">Playback</string>
+    <string name="playback_speed_2x">2×</string>
     <string name="live">Live</string>
     <string name="pause">Pause</string>
     <string name="reproduction_and_events">Reproduction and events</string>
