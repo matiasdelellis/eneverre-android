@@ -117,6 +117,13 @@
                     android:paddingBottom="88dp"
                     tools:listitem="@layout/item_event" />
 
+                <ProgressBar
+                    android:id="@+id/events_loading"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:visibility="gone" />
+
                 <LinearLayout
                     android:id="@+id/events_empty"
                     android:layout_width="match_parent"

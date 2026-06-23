@@ -87,6 +87,7 @@ public class PlaybackFragment extends Fragment {
     private final Set<Long> eventIds = new HashSet<>();
     private boolean hasEvents = false;
     private boolean eventsLoaded = false;
+    private boolean eventsLoading = false;
 
     private long lastTimeSelected = 0L;
     private long lastLength = 0L;
@@ -508,10 +509,15 @@ public class PlaybackFragment extends Fragment {
     }
 
     private void getEvents(long since, long until) {
+        eventsLoading = true;
+        updateEventsPanelVisibility(getResources().getConfiguration().orientation);
         ApiClient.getApiService().events(currentCamera.getId(), Time.MStoRFC3339(since), Time.MStoRFC3339(until)).enqueue(new ApiCallback<EventsResponse>(requireContext()) {
             @Override
             public void onSuccess(EventsResponse body) {
+                eventsLoading = false;
                 if (body == null || body.getEvents() == null) {
+                    eventsLoaded = true;
+                    updateEventsPanelVisibility(getResources().getConfiguration().orientation);
                     return;
                 }
 
@@ -537,6 +543,9 @@ public class PlaybackFragment extends Fragment {
 
             @Override
             public void onError(int httpCode, String message) {
+                eventsLoading = false;
+                eventsLoaded = true;
+                updateEventsPanelVisibility(getResources().getConfiguration().orientation);
                 Toast.makeText(requireContext(), R.string.error_get_events, LENGTH_LONG).show();
             }
         });
@@ -569,12 +578,14 @@ public class PlaybackFragment extends Fragment {
     }
 
     private void updateEventsPanelVisibility(int orientation) {
-        boolean showPanel = orientation == Configuration.ORIENTATION_PORTRAIT && eventsLoaded;
+        boolean showPanel = orientation == Configuration.ORIENTATION_PORTRAIT && (eventsLoading || eventsLoaded);
         root.findViewById(R.id.events_panel).setVisibility(showPanel ? VISIBLE : GONE);
 
-        // Within the panel, swap between the list and the empty state.
-        root.findViewById(R.id.events_recycler).setVisibility(hasEvents ? VISIBLE : GONE);
-        root.findViewById(R.id.events_empty).setVisibility(hasEvents ? GONE : VISIBLE);
+        // Within the panel, show the spinner while loading, then swap between
+        // the list and the empty state.
+        root.findViewById(R.id.events_loading).setVisibility(eventsLoading ? VISIBLE : GONE);
+        root.findViewById(R.id.events_recycler).setVisibility(!eventsLoading && hasEvents ? VISIBLE : GONE);
+        root.findViewById(R.id.events_empty).setVisibility(!eventsLoading && !hasEvents ? VISIBLE : GONE);
     }
 
     private void takeSnapshot() {
