@@ -66,5 +66,6 @@
     <string name="invalid_user_code">Invalid user code</string>
     <string name="share">Share</string>
     <string name="download">Download</string>
+    <string name="play">Play</string>
     <string name="open">Open</string>
 </resources>

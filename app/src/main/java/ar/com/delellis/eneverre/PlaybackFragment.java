@@ -19,6 +19,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.PopupMenu;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -43,6 +44,7 @@ import java.util.List;
 import java.util.Set;
 
 import ar.com.delellis.eneverre.adapter.EventsAdapter;
+import ar.com.delellis.eneverre.adapter.OnEventClickListener;
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.Event;
@@ -279,7 +281,17 @@ public class PlaybackFragment extends Fragment {
             }
         });
 
-        eventsAdapter = new EventsAdapter(requireContext(), (event, startMsec) -> seekToEvent(event, startMsec));
+        eventsAdapter = new EventsAdapter(requireContext(), new OnEventClickListener() {
+            @Override
+            public void onEventClick(Event event, long startMsec) {
+                seekToEvent(event, startMsec);
+            }
+
+            @Override
+            public void onEventLongClick(View anchor, Event event, long startMsec) {
+                showEventOptions(anchor, event, startMsec);
+            }
+        });
         RecyclerView eventsRecycler = view.findViewById(R.id.events_recycler);
         eventsRecycler.setLayoutManager(new LinearLayoutManager(requireContext()));
         eventsRecycler.setAdapter(eventsAdapter);
@@ -457,6 +469,11 @@ public class PlaybackFragment extends Fragment {
     }
 
     private void downloadPlayback(String startRFC333, double duration) {
+        downloadPlayback(startRFC333, duration, timelineView.getCurrent());
+    }
+
+    private void downloadPlayback(String startRFC333, double duration, long fileTimeMs) {
+        String dateTime = Time.MStoFriendlyURL(fileTimeMs);
         ApiClient.getApiService().recording(currentCamera.getId(), startRFC333, duration).enqueue(new ApiCallback<ResponseBody>(requireContext()) {
             @Override
             public void onSuccess(ResponseBody body) {
@@ -465,7 +482,6 @@ public class PlaybackFragment extends Fragment {
                     return;
                 }
 
-                String dateTime = Time.MStoFriendlyURL(timelineView.getCurrent());
                 String fileName = Download.buildFileName(currentCamera.getId(), dateTime, "mp4");
                 Download.saveClipAndShare(requireActivity(), body, fileName, currentCamera.getName(), null, (long) duration);
             }
@@ -583,6 +599,39 @@ public class PlaybackFragment extends Fragment {
         syncEventHighlight();
 
         startPlayback(Time.MStoRFC3339(timeMs), 30.0);
+    }
+
+    /** Long-press menu for an event row: play from it or download its clip. */
+    private void showEventOptions(View anchor, Event event, long startMsec) {
+        PopupMenu popup = new PopupMenu(requireContext(), anchor);
+        popup.getMenu().add(Menu.NONE, 1, 0, R.string.play);
+        popup.getMenu().add(Menu.NONE, 2, 1, R.string.download);
+        popup.setOnMenuItemClickListener(item -> {
+            switch (item.getItemId()) {
+                case 1:
+                    seekToEvent(event, startMsec);
+                    return true;
+                case 2:
+                    downloadEvent(event, startMsec);
+                    return true;
+                default:
+                    return false;
+            }
+        });
+        popup.show();
+    }
+
+    /** Downloads the clip spanning the event (start_ts .. end_ts). */
+    private void downloadEvent(Event event, long startMsec) {
+        long endMsec = Time.RFC3339toMS(event.getEndTs());
+        if (endMsec <= startMsec) {
+            Toast.makeText(requireContext(), R.string.there_is_no_recording, LENGTH_LONG).show();
+            return;
+        }
+
+        double duration = (double) (endMsec - startMsec) / 1000.0;
+        downloadPlayback(Time.MStoRFC3339(startMsec), duration, startMsec);
+        Toast.makeText(requireContext(), R.string.downloading_recording, LENGTH_LONG).show();
     }
 
     /**

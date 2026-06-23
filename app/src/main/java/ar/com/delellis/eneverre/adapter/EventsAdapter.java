@@ -63,6 +63,14 @@ public class EventsAdapter extends RecyclerView.Adapter<EventsAdapterHolder> {
                 listener.onEventClick(event, startMsec);
             }
         });
+
+        holder.itemView.setOnLongClickListener(v -> {
+            if (listener != null && startMsec > 0) {
+                listener.onEventLongClick(v, event, startMsec);
+                return true;
+            }
+            return false;
+        });
     }
 
     @Override
