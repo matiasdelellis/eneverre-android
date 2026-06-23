@@ -85,6 +85,7 @@ public class LiveViewFragment extends Fragment {
         @Override
         public void onPrepareMenu(@NonNull Menu menu) {
             boolean privacy = currentCamera.getPrivacy();
+            menu.findItem(R.id.privacy_action).setVisible(!privacy);
             menu.findItem(R.id.pip_action).setVisible(!privacy);
             menu.findItem(R.id.volume_action).setVisible(!privacy);
             menu.findItem(R.id.recalibrate_ptz).setVisible(currentCamera.getPtz() && !privacy);
@@ -95,7 +96,11 @@ public class LiveViewFragment extends Fragment {
         @Override
         public boolean onMenuItemSelected(@NonNull MenuItem item) {
             int itemId = item.getItemId();
-            if (itemId == R.id.pip_action) {
+            if (itemId == R.id.privacy_action) {
+                setVideoPrivacyLayout(true);
+                stopLive(true);
+                return true;
+            } else if (itemId == R.id.pip_action) {
                 ((ViewActivity) requireActivity()).enterPipMode(currentCamera);
                 return true;
             } else if (itemId == R.id.volume_action) {
@@ -169,12 +174,6 @@ public class LiveViewFragment extends Fragment {
             prepareLive();
             setMuteLive(prefs.isGlobalMute());
             startLive();
-        });
-
-        view.findViewById(R.id.privacy_button).setVisibility(VISIBLE);
-        view.findViewById(R.id.privacy_button).setOnClickListener(v -> {
-            setVideoPrivacyLayout(true);
-            stopLive(true);
         });
 
         view.findViewById(R.id.record_button).setVisibility(VISIBLE);
@@ -299,7 +298,6 @@ public class LiveViewFragment extends Fragment {
 
     private void setVideoPrivacyLayout(boolean privacy) {
         fragmentView.findViewById(R.id.take_snapshot).setEnabled(!privacy);
-        fragmentView.findViewById(R.id.privacy_button).setEnabled(!privacy);
         fragmentView.findViewById(R.id.record_button).setEnabled(!privacy);
 
         fragmentView.findViewById(R.id.exit_privacy_button).setVisibility(privacy ? VISIBLE : GONE);
@@ -401,14 +399,12 @@ public class LiveViewFragment extends Fragment {
                 fragmentView.findViewById(R.id.ptz_buttons).setVisibility(GONE);
             }
             fragmentView.findViewById(R.id.record_button).setVisibility(GONE);
-            fragmentView.findViewById(R.id.privacy_button).setVisibility(GONE);
             fragmentView.findViewById(R.id.take_snapshot).setVisibility(GONE);
         } else {
             if (currentCamera.getPtz()) {
                 fragmentView.findViewById(R.id.ptz_buttons).setVisibility(VISIBLE);
             }
             fragmentView.findViewById(R.id.record_button).setVisibility(VISIBLE);
-            fragmentView.findViewById(R.id.privacy_button).setVisibility(VISIBLE);
             fragmentView.findViewById(R.id.take_snapshot).setVisibility(VISIBLE);
         }
     }
