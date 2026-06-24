@@ -25,18 +25,19 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.OptIn;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.MenuProvider;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.Lifecycle;
+import androidx.media3.common.MediaItem;
+import androidx.media3.common.util.UnstableApi;
+import androidx.media3.ui.PlayerView;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.color.MaterialColors;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-
-import org.videolan.libvlc.MediaPlayer;
-import org.videolan.libvlc.util.VLCVideoLayout;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -51,7 +52,7 @@ import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.Event;
 import ar.com.delellis.eneverre.api.model.EventsResponse;
 import ar.com.delellis.eneverre.api.model.Recording;
-import ar.com.delellis.eneverre.player.VlcPlayer;
+import ar.com.delellis.eneverre.player.Media3Player;
 import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
 import ar.com.delellis.eneverre.util.AppPreferences;
@@ -78,8 +79,20 @@ public class PlaybackFragment extends Fragment {
 
     private View root;
 
-    private VlcPlayer vlcPlayer = null;
-    private VLCVideoLayout vlcVideoLayout = null;
+    private Media3Player player = null;
+    private PlayerView playerView = null;
+
+    /**
+     * Full chunk plan for the current playback session: absolute start (ms) and
+     * duration (ms) of every chunk from the chosen moment forward. Cheap to hold
+     * (two longs each); chunks are turned into player {@link MediaItem}s lazily.
+     */
+    private long[] chunkStartsMs = null;
+    private long[] chunkDursMs = null;
+    /** How many of the planned chunks have actually been queued into the player. */
+    private int enqueuedCount = 0;
+    /** Moment to start playing once recordings finish loading (swipe-in resume). */
+    private long pendingSeekMs = 0L;
 
     private TimelineView timelineView = null;
 
@@ -95,7 +108,6 @@ public class PlaybackFragment extends Fragment {
     private boolean eventsLoading = false;
 
     private long lastTimeSelected = 0L;
-    private long lastLength = 0L;
     private boolean timelineSelecting = false;
     private long lastOldRecording = -1L;
 
@@ -136,39 +148,43 @@ public class PlaybackFragment extends Fragment {
 
         timelineView = view.findViewById(R.id.timeline_view);
 
-        vlcVideoLayout = view.findViewById(R.id.vlc_playback_layout);
-        VideoTouchListener touchListener = new VideoTouchListener(vlcVideoLayout);
+        playerView = view.findViewById(R.id.player_view);
+        playerView.setUseController(false);
+        VideoTouchListener touchListener = new VideoTouchListener(playerView);
         // Press and hold on the video to fast-forward at 2x; release to resume 1x.
         touchListener.setOnLongPressListener(new VideoTouchListener.OnLongPressListener() {
             @Override
             public void onLongPressStart() {
-                if (vlcPlayer != null) {
-                    vlcPlayer.setRate(2.0f);
+                if (player != null) {
+                    player.setRate(2.0f);
                     root.findViewById(R.id.speed_badge).setVisibility(VISIBLE);
                 }
             }
 
             @Override
             public void onLongPressEnd() {
-                if (vlcPlayer != null) {
-                    vlcPlayer.setRate(1.0f);
+                if (player != null) {
+                    player.setRate(1.0f);
                     root.findViewById(R.id.speed_badge).setVisibility(GONE);
                 }
             }
         });
-        vlcVideoLayout.setOnTouchListener(touchListener);
+        playerView.setOnTouchListener(touchListener);
 
-        vlcPlayer = new VlcPlayer(requireContext());
-        vlcPlayer.setEventListener(event -> {
-            if (event.type == MediaPlayer.Event.Buffering) {
-                if (event.getBuffering() == 100f) {
-                    root.findViewById(R.id.loading_progress).setVisibility(GONE);
-                } else {
-                    root.findViewById(R.id.loading_progress).setVisibility(VISIBLE);
-                }
-            } else if (event.type == MediaPlayer.Event.PositionChanged) {
+        player = new Media3Player(requireContext(), ApiClient.getInstance().getAuthorizationHeader());
+        player.setListener(new Media3Player.Listener() {
+            @Override
+            public void onBuffering(boolean buffering) {
+                root.findViewById(R.id.loading_progress).setVisibility(buffering ? VISIBLE : GONE);
+            }
+
+            @Override
+            public void onProgress(int itemIndex, long positionMs) {
                 if (timelineSelecting) return;
-                long newTime = lastTimeSelected + (long) (lastLength * event.getPositionChanged());
+                if (chunkStartsMs == null || itemIndex < 0 || itemIndex >= chunkStartsMs.length) return;
+
+                long newTime = chunkStartsMs[itemIndex] + positionMs;
+                lastTimeSelected = newTime;
                 timelineView.setCurrentWithAnimation(newTime);
 
                 // Follow the event the timeline marks as current (highlight while
@@ -189,14 +205,30 @@ public class PlaybackFragment extends Fragment {
 
                     timelineView.setMajor1Records(fakeRecordingEvents);
                 }
-            } else if (event.type == MediaPlayer.Event.LengthChanged) {
-                lastLength = event.getLengthChanged();
-            } else if (event.type == MediaPlayer.Event.EndReached) {
-                lastTimeSelected += lastLength;
-                startPlayback(Time.MStoRFC3339(lastTimeSelected), 10.0);
-                timelineView.setCurrentWithAnimation(lastTimeSelected);
-            } else if (event.type == MediaPlayer.Event.EncounteredError) {
+            }
+
+            @Override
+            public void onItemTransition(int itemIndex) {
+                // Crossed into a new chunk: keep the queue topped up so playback
+                // continues seamlessly past what's currently enqueued.
+                enqueueMoreIfNeeded(itemIndex);
+            }
+
+            @Override
+            public void onEnded() {
+                // Caught up to the end of the loaded recordings.
                 root.findViewById(R.id.loading_progress).setVisibility(GONE);
+            }
+
+            @Override
+            public void onError(@Nullable String message) {
+                Log.e(TAG, "Player error (skipping chunk): " + message);
+                // The player is about to skip past the failed chunk. If it was the
+                // tail of the queue (e.g. the last chunk before a recording gap),
+                // append the next recording's chunks first so there IS a next item
+                // to skip to — otherwise a transient 502 there would be mistaken
+                // for the end of the available footage.
+                enqueueNextBatch();
             }
         });
 
@@ -234,7 +266,7 @@ public class PlaybackFragment extends Fragment {
         view.findViewById(R.id.take_snapshot).setOnClickListener(v -> takeSnapshot());
 
         if (prefs.isGlobalMute()) {
-            vlcPlayer.mute(true);
+            player.mute(true);
         }
 
         timelineView.setOnTimelineListener(new TimelineView.OnTimelineListener() {
@@ -257,7 +289,7 @@ public class PlaybackFragment extends Fragment {
                 setSharedPlaybackTime(l);
                 syncEventHighlight();
 
-                startPlayback(Time.MStoRFC3339(lastTimeSelected), 10.0);
+                playFrom(l);
             }
 
             @Override
@@ -322,8 +354,7 @@ public class PlaybackFragment extends Fragment {
         super.onResume();
         viewResumed = true;
 
-        vlcPlayer.detachViews();
-        vlcPlayer.attachView(vlcVideoLayout);
+        player.attachView(playerView);
 
         // Resume at the time shared by the previous camera (so swiping cameras
         // keeps the same moment), falling back to this page's last position.
@@ -337,7 +368,13 @@ public class PlaybackFragment extends Fragment {
             if (timelineView != null) {
                 timelineView.setCurrent(seek);
             }
-            startPlayback(Time.MStoRFC3339(seek), 10.0);
+            // Recordings may not be loaded yet on a fresh swipe-in; if so defer
+            // playback until getRecordings() finishes (see pendingSeekMs).
+            if (hasBackgroundRecords()) {
+                playFrom(seek);
+            } else {
+                pendingSeekMs = seek;
+            }
         }
     }
 
@@ -354,8 +391,8 @@ public class PlaybackFragment extends Fragment {
             }
         }
 
-        vlcPlayer.stop();
-        vlcPlayer.detachViews();
+        player.stop();
+        player.detachView(playerView);
     }
 
     private PlaybackTimeHost timeHost() {
@@ -377,9 +414,9 @@ public class PlaybackFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
-        if (vlcPlayer != null) {
-            vlcPlayer.release();
-            vlcPlayer = null;
+        if (player != null) {
+            player.release();
+            player = null;
         }
         super.onDestroyView();
     }
@@ -401,22 +438,22 @@ public class PlaybackFragment extends Fragment {
         public boolean onMenuItemSelected(@NonNull MenuItem item) {
             int itemId = item.getItemId();
             if (itemId == R.id.volume_action) {
-                if (vlcPlayer.isMuted()) {
-                    vlcPlayer.mute(false);
+                if (player.isMuted()) {
+                    player.mute(false);
                     prefs.setGlobalMute(false);
                     item.setIcon(R.drawable.ic_volume_24);
                 } else {
-                    vlcPlayer.mute(true);
+                    player.mute(true);
                     prefs.setGlobalMute(true);
                     item.setIcon(R.drawable.ic_muted_24);
                 }
                 return true;
             } else if (itemId == R.id.pause_action) {
-                if (vlcPlayer.isPaused()) {
-                    vlcPlayer.resume();
+                if (player.isPaused()) {
+                    player.resume();
                     item.setIcon(R.drawable.ic_pause_24);
                 } else {
-                    vlcPlayer.pause();
+                    player.pause();
                     item.setIcon(R.drawable.ic_play_24);
                 }
                 return true;
@@ -428,8 +465,7 @@ public class PlaybackFragment extends Fragment {
                     timelineView.invalidate();
                     syncEventHighlight();
 
-                    String start = Time.MStoRFC3339(lastTimeSelected);
-                    startPlayback(start, 30.0);
+                    playFrom(lastTimeSelected);
                 });
                 return true;
             } else if (itemId == R.id.share_moment) {
@@ -468,14 +504,122 @@ public class PlaybackFragment extends Fragment {
         }
     }
 
-    private void startPlayback(String startRFC333, double duration) {
+    private boolean hasBackgroundRecords() {
+        return timelineView != null
+                && timelineView.getBackgroundRecords() != null
+                && !timelineView.getBackgroundRecords().isEmpty();
+    }
+
+    /** Each queued playback request spans at most this many ms. */
+    private static final long CHUNK_MS = 10_000L;
+    /** Chunks queued into the player up front when playback starts. */
+    private static final int INITIAL_CHUNKS = 18; // ~3 min
+    /** Chunks appended each time the queue is topped up. */
+    private static final int BATCH_CHUNKS = 12; // ~2 min
+    /** Top up the queue once playback gets this close to its tail. */
+    private static final int PREFETCH_THRESHOLD = 6; // ~1 min ahead
+
+    /**
+     * Starts (gapless) playback from {@code timeMs}: builds a chunk plan over the
+     * loaded recordings (from that moment forward), queues the first chunks, and
+     * lets ExoPlayer transition through them with no gap. The rest of the plan is
+     * appended on the fly as playback advances (see {@link #enqueueMoreIfNeeded}),
+     * so the live playlist stays small regardless of how long the span is.
+     *
+     * <p>Replaces VLC's fixed-window + restart-on-EndReached approach, which tore
+     * down and rebuilt the pipeline at each boundary (the source of the gaps).
+     * Chunks are kept small because the backend generates each clip on demand and
+     * 502s on very long playback windows; pre-queuing them is what keeps playback
+     * gapless despite the small requests.
+     */
+    private void playFrom(long timeMs) {
         // Never play from a non-visible page (a neighbour in the pager).
-        if (vlcPlayer == null || !viewResumed) {
+        if (player == null || !viewResumed) {
             return;
         }
-        String playbackUrl = ApiClient.getInstance().getPlaybackUrl(currentCamera.getId(), startRFC333, duration);
+        ArrayList<TimeRecord> records = (timelineView != null) ? timelineView.getBackgroundRecords() : null;
+        if (records == null || records.isEmpty()) {
+            return;
+        }
 
-        vlcPlayer.playUri(android.net.Uri.parse(playbackUrl));
+        // Recordings ascending by start, so the plan plays forward in time.
+        ArrayList<TimeRecord> ordered = new ArrayList<>(records);
+        Collections.sort(ordered, (a, b) -> Long.compare(a.timestampMsec, b.timestampMsec));
+
+        // Plan every chunk up front (cheap: just two longs each); MediaItems are
+        // built lazily from this plan as the queue is topped up.
+        List<Long> starts = new ArrayList<>();
+        List<Long> durs = new ArrayList<>();
+        for (TimeRecord tr : ordered) {
+            long segStart = tr.timestampMsec;
+            long segEnd = segStart + tr.durationMsec;
+            if (segEnd <= timeMs) {
+                continue; // segment entirely before the requested moment
+            }
+            // First relevant recording starts exactly at timeMs; later ones at
+            // their own start (timeMs is already behind them).
+            long pos = Math.max(segStart, timeMs);
+            while (pos < segEnd) {
+                long chunkMs = Math.min(CHUNK_MS, segEnd - pos);
+                starts.add(pos);
+                durs.add(chunkMs);
+                pos += chunkMs;
+            }
+        }
+
+        if (starts.isEmpty()) {
+            Toast.makeText(requireContext(), R.string.there_is_no_recording, LENGTH_LONG).show();
+            return;
+        }
+
+        chunkStartsMs = new long[starts.size()];
+        chunkDursMs = new long[durs.size()];
+        for (int i = 0; i < starts.size(); i++) {
+            chunkStartsMs[i] = starts.get(i);
+            chunkDursMs[i] = durs.get(i);
+        }
+        enqueuedCount = 0;
+
+        // First chunk starts exactly at timeMs, so no per-item seek is needed.
+        int first = Math.min(INITIAL_CHUNKS, chunkStartsMs.length);
+        player.setPlaylist(buildItems(0, first), 0, 0);
+        enqueuedCount = first;
+    }
+
+    /** Builds {@link MediaItem}s for chunk plan indices {@code [from, to)}. */
+    private List<MediaItem> buildItems(int from, int to) {
+        String camId = currentCamera.getId();
+        List<MediaItem> items = new ArrayList<>(to - from);
+        for (int i = from; i < to; i++) {
+            double durationSec = chunkDursMs[i] / 1000.0;
+            String url = ApiClient.getInstance().getPlaybackStreamUrl(camId, Time.MStoRFC3339(chunkStartsMs[i]), durationSec);
+            items.add(MediaItem.fromUri(url));
+        }
+        return items;
+    }
+
+    /**
+     * Appends the next batch of planned chunks once playback nears the tail of the
+     * queue, so it continues seamlessly. No-op once the whole plan is queued.
+     */
+    private void enqueueMoreIfNeeded(int currentIndex) {
+        if (player == null || chunkStartsMs == null || enqueuedCount >= chunkStartsMs.length) {
+            return;
+        }
+        if (currentIndex < enqueuedCount - PREFETCH_THRESHOLD) {
+            return; // still comfortably ahead
+        }
+        enqueueNextBatch();
+    }
+
+    /** Appends the next plan batch to the player. No-op once the plan is exhausted. */
+    private void enqueueNextBatch() {
+        if (player == null || chunkStartsMs == null || enqueuedCount >= chunkStartsMs.length) {
+            return;
+        }
+        int to = Math.min(enqueuedCount + BATCH_CHUNKS, chunkStartsMs.length);
+        player.addMediaItems(buildItems(enqueuedCount, to));
+        enqueuedCount = to;
     }
 
     private void downloadPlayback(String startRFC333, double duration) {
@@ -530,6 +674,14 @@ public class PlaybackFragment extends Fragment {
 
                 if (selectTime > 0) {
                     timelineView.setCurrent(selectTime);
+                }
+
+                // Recordings are now loaded: honour a playback request that
+                // arrived before they were available (swipe-in resume).
+                if (pendingSeekMs > 0 && viewResumed) {
+                    long seek = pendingSeekMs;
+                    pendingSeekMs = 0;
+                    playFrom(seek);
                 }
             }
 
@@ -608,7 +760,7 @@ public class PlaybackFragment extends Fragment {
         setSharedPlaybackTime(timeMs);
         syncEventHighlight();
 
-        startPlayback(Time.MStoRFC3339(timeMs), 30.0);
+        playFrom(timeMs);
     }
 
     /** Long-press menu for an event row: play from it or download its clip. */
@@ -695,8 +847,14 @@ public class PlaybackFragment extends Fragment {
         root.findViewById(R.id.events_empty).setVisibility(!eventsLoading && !hasEvents ? VISIBLE : GONE);
     }
 
+    @OptIn(markerClass = UnstableApi.class)
     private void takeSnapshot() {
-        SurfaceView surfaceView = root.findViewById(org.videolan.R.id.surface_video);
+        View videoSurface = playerView.getVideoSurfaceView();
+        if (!(videoSurface instanceof SurfaceView)) {
+            Toast.makeText(requireContext(), R.string.error_snapshot, LENGTH_LONG).show();
+            return;
+        }
+        SurfaceView surfaceView = (SurfaceView) videoSurface;
         Snapshot.getSurfaceBitmap(surfaceView, new Snapshot.PixelCopyListener() {
             @Override
             public void onSurfaceBitmapReady(android.graphics.Bitmap bitmap) {

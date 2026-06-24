@@ -8,8 +8,6 @@ import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 
-import org.videolan.libvlc.util.VLCVideoLayout;
-
 public class VideoTouchListener implements View.OnTouchListener {
 
     /** Notified when the user presses and holds on the video, and when they release. */
@@ -29,13 +27,13 @@ public class VideoTouchListener implements View.OnTouchListener {
     private int maxScrollX = 0;
     private int maxScrollY = 0;
 
-    private final VLCVideoLayout vlcVideoLayout;
+    private final View vlcVideoLayout;
 
     private final GestureDetector gestureDetector;
     private OnLongPressListener longPressListener = null;
     private boolean longPressActive = false;
 
-    public VideoTouchListener(VLCVideoLayout view) {
+    public VideoTouchListener(View view) {
         vlcVideoLayout = view;
         gestureDetector = new GestureDetector(view.getContext(), new GestureDetector.SimpleOnGestureListener() {
             @Override

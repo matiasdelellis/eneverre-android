@@ -83,6 +83,16 @@ public class ApiClient {
         return "Basic " + Base64.encodeToString(credentials.getBytes(), Base64.URL_SAFE|Base64.NO_WRAP);
     }
 
+    /**
+     * The {@code Authorization} header value ({@code "Basic ..."}) attached to
+     * every API request. Exposed so direct stream fetchers that bypass Retrofit
+     * (e.g. ExoPlayer's {@code DataSource}) can send the same credentials by
+     * header instead of embedding them inline in the URL.
+     */
+    public String getAuthorizationHeader() {
+        return getAuthorization();
+    }
+
     private String getApiBase() {
         if (this.port > 0) {
             return this.protocol + this.baseUrl + ":" + this.port + "/api/";
@@ -91,19 +101,13 @@ public class ApiClient {
     }
 
     /**
-     * Builds a playback URL with the credentials embedded inline
-     * ({@code user:pass@host}) because VLC fetches the stream directly.
-     *
-     * <p><b>Security:</b> the returned string contains plaintext credentials.
-     * Never log it, put it in a crash report, or expose it to other apps. It is
-     * handed straight to {@code VlcPlayer.playUri()} (libVLC runs with
-     * {@code --quiet}, so it is not written to the VLC log either).
+     * Builds a playback URL for the given camera and time window. Carries no
+     * credentials: clients authenticate with the {@code Authorization} header
+     * from {@link #getAuthorizationHeader()} (e.g. ExoPlayer's data source), so
+     * the URL is safe to build and log.
      */
-    public String getPlaybackUrl(String device_id, String start, double duration) {
-        if (this.port > 0) {
-            return this.protocol + getCredentials() + "@" + this.baseUrl + ":" + this.port + "/api/camera/" + device_id + "/playback/get?start=" + start + "&duration=" + duration;
-        }
-        return this.protocol + getCredentials() + "@" + this.baseUrl + "/api/camera/" + device_id + "/playback/get?start=" + start + "&duration=" + duration;
+    public String getPlaybackStreamUrl(String device_id, String start, double duration) {
+        return getApiBase() + "camera/" + device_id + "/playback/get?start=" + start + "&duration=" + duration;
     }
 
     private String getCredentials() {

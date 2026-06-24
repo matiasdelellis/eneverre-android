@@ -35,10 +35,13 @@
             android:layout_width="match_parent"
             android:layout_height="250dp">
 
-            <org.videolan.libvlc.util.VLCVideoLayout
-                android:id="@+id/vlc_playback_layout"
+            <androidx.media3.ui.PlayerView
+                android:id="@+id/player_view"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="match_parent"
+                app:surface_type="surface_view"
+                app:resize_mode="fit"
+                app:use_controller="false" />
 
             <ProgressBar
                 android:id="@+id/loading_progress"
