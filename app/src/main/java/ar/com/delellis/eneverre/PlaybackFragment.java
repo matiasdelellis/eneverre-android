@@ -82,13 +82,22 @@ public class PlaybackFragment extends Fragment {
     private Media3Player player = null;
     private PlayerView playerView = null;
 
+    /** One planned playback chunk: an absolute start and a duration, both in ms. */
+    private static final class Chunk {
+        final long startMs;
+        final long durationMs;
+        Chunk(long startMs, long durationMs) {
+            this.startMs = startMs;
+            this.durationMs = durationMs;
+        }
+    }
+
     /**
-     * Full chunk plan for the current playback session: absolute start (ms) and
-     * duration (ms) of every chunk from the chosen moment forward. Cheap to hold
-     * (two longs each); chunks are turned into player {@link MediaItem}s lazily.
+     * Full chunk plan for the current playback session, from the chosen moment
+     * forward. Cheap to hold; chunks are turned into player {@link MediaItem}s
+     * lazily as the queue is topped up.
      */
-    private long[] chunkStartsMs = null;
-    private long[] chunkDursMs = null;
+    private List<Chunk> chunks = null;
     /** How many of the planned chunks have actually been queued into the player. */
     private int enqueuedCount = 0;
     /** Moment to start playing once recordings finish loading (swipe-in resume). */
@@ -181,9 +190,9 @@ public class PlaybackFragment extends Fragment {
             @Override
             public void onProgress(int itemIndex, long positionMs) {
                 if (timelineSelecting) return;
-                if (chunkStartsMs == null || itemIndex < 0 || itemIndex >= chunkStartsMs.length) return;
+                if (chunks == null || itemIndex < 0 || itemIndex >= chunks.size()) return;
 
-                long newTime = chunkStartsMs[itemIndex] + positionMs;
+                long newTime = chunks.get(itemIndex).startMs + positionMs;
                 lastTimeSelected = newTime;
                 timelineView.setCurrentWithAnimation(newTime);
 
@@ -546,10 +555,9 @@ public class PlaybackFragment extends Fragment {
         ArrayList<TimeRecord> ordered = new ArrayList<>(records);
         Collections.sort(ordered, (a, b) -> Long.compare(a.timestampMsec, b.timestampMsec));
 
-        // Plan every chunk up front (cheap: just two longs each); MediaItems are
-        // built lazily from this plan as the queue is topped up.
-        List<Long> starts = new ArrayList<>();
-        List<Long> durs = new ArrayList<>();
+        // Plan every chunk up front (cheap); MediaItems are built lazily from this
+        // plan as the queue is topped up.
+        chunks = new ArrayList<>();
         for (TimeRecord tr : ordered) {
             long segStart = tr.timestampMsec;
             long segEnd = segStart + tr.durationMsec;
@@ -561,27 +569,18 @@ public class PlaybackFragment extends Fragment {
             long pos = Math.max(segStart, timeMs);
             while (pos < segEnd) {
                 long chunkMs = Math.min(CHUNK_MS, segEnd - pos);
-                starts.add(pos);
-                durs.add(chunkMs);
+                chunks.add(new Chunk(pos, chunkMs));
                 pos += chunkMs;
             }
         }
 
-        if (starts.isEmpty()) {
+        if (chunks.isEmpty()) {
             Toast.makeText(requireContext(), R.string.there_is_no_recording, LENGTH_LONG).show();
             return;
         }
 
-        chunkStartsMs = new long[starts.size()];
-        chunkDursMs = new long[durs.size()];
-        for (int i = 0; i < starts.size(); i++) {
-            chunkStartsMs[i] = starts.get(i);
-            chunkDursMs[i] = durs.get(i);
-        }
-        enqueuedCount = 0;
-
         // First chunk starts exactly at timeMs, so no per-item seek is needed.
-        int first = Math.min(INITIAL_CHUNKS, chunkStartsMs.length);
+        int first = Math.min(INITIAL_CHUNKS, chunks.size());
         player.setPlaylist(buildItems(0, first), 0, 0);
         enqueuedCount = first;
     }
@@ -591,8 +590,8 @@ public class PlaybackFragment extends Fragment {
         String camId = currentCamera.getId();
         List<MediaItem> items = new ArrayList<>(to - from);
         for (int i = from; i < to; i++) {
-            double durationSec = chunkDursMs[i] / 1000.0;
-            String url = ApiClient.getInstance().getPlaybackStreamUrl(camId, Time.MStoRFC3339(chunkStartsMs[i]), durationSec);
+            Chunk chunk = chunks.get(i);
+            String url = ApiClient.getInstance().getPlaybackStreamUrl(camId, Time.MStoRFC3339(chunk.startMs), chunk.durationMs / 1000.0);
             items.add(MediaItem.fromUri(url));
         }
         return items;
@@ -603,9 +602,6 @@ public class PlaybackFragment extends Fragment {
      * queue, so it continues seamlessly. No-op once the whole plan is queued.
      */
     private void enqueueMoreIfNeeded(int currentIndex) {
-        if (player == null || chunkStartsMs == null || enqueuedCount >= chunkStartsMs.length) {
-            return;
-        }
         if (currentIndex < enqueuedCount - PREFETCH_THRESHOLD) {
             return; // still comfortably ahead
         }
@@ -614,10 +610,10 @@ public class PlaybackFragment extends Fragment {
 
     /** Appends the next plan batch to the player. No-op once the plan is exhausted. */
     private void enqueueNextBatch() {
-        if (player == null || chunkStartsMs == null || enqueuedCount >= chunkStartsMs.length) {
+        if (player == null || chunks == null || enqueuedCount >= chunks.size()) {
             return;
         }
-        int to = Math.min(enqueuedCount + BATCH_CHUNKS, chunkStartsMs.length);
+        int to = Math.min(enqueuedCount + BATCH_CHUNKS, chunks.size());
         player.addMediaItems(buildItems(enqueuedCount, to));
         enqueuedCount = to;
     }
