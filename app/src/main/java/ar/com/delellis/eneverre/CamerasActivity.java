@@ -16,6 +16,8 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
 import java.util.List;
 
 import ar.com.delellis.eneverre.adapter.LocationsAdapter;
@@ -36,6 +38,9 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
     public static final String LOCATION_CAMERAS_DATA = "LOCATION_CAMERAS";
 
     public static final String SELECTED_CAMERA_DATA = "SELECTED_CAMERA";
+
+    /** A device user code to confirm and authorize, delivered from a link. */
+    public static final String EXTRA_PENDING_USER_CODE = "PENDING_USER_CODE";
 
     private Locations locations = null;
 
@@ -67,6 +72,22 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
         locations = new Locations(cameraList);
         locationsAdapter = new LocationsAdapter(this, locations, this);
         recyclerView.setAdapter(locationsAdapter);
+
+        // Opened from a device-linking link (<host>/?usercode=XXXXXX): confirm
+        // before authorizing, instead of asking the user to type the code.
+        String pendingUserCode = intent.getStringExtra(EXTRA_PENDING_USER_CODE);
+        if (pendingUserCode != null && !pendingUserCode.isEmpty()) {
+            confirmDeviceLink(pendingUserCode.toUpperCase());
+        }
+    }
+
+    private void confirmDeviceLink(String userCode) {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.link_device)
+                .setMessage(getString(R.string.link_device_confirm, userCode))
+                .setPositiveButton(R.string.accept, (dialog, which) -> onUserCodeRequest(userCode))
+                .setNegativeButton(R.string.cancel, null)
+                .show();
     }
 
     @Override

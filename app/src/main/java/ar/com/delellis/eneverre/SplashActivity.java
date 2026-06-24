@@ -19,8 +19,13 @@ import ar.com.delellis.eneverre.util.SecureStore;
 
 public class SplashActivity extends AppCompatActivity {
 
+    /** Query param of a device-linking link (<host>/?usercode=XXXXXX). */
+    private static final String PARAM_USER_CODE = "usercode";
+
     /** A shared event link this launch should open, or null for a normal start. */
     private EventShareLink.Parsed pendingLink = null;
+    /** A device user code to authorize from a link, or null for a normal start. */
+    private String pendingUserCode = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -29,6 +34,8 @@ public class SplashActivity extends AppCompatActivity {
 
         Uri data = getIntent().getData();
         pendingLink = data != null ? EventShareLink.parse(data) : null;
+        pendingUserCode = data != null && data.isHierarchical()
+                ? data.getQueryParameter(PARAM_USER_CODE) : null;
 
         SecureStore secureStore = SecureStore.getInstance(this);
         if (!secureStore.hasCredentials()) {
@@ -81,6 +88,11 @@ public class SplashActivity extends AppCompatActivity {
     private void goToCamerasActivity(List<Camera> cameras) {
         Intent intent = new Intent(SplashActivity.this, CamerasActivity.class);
         intent.putExtra(CamerasActivity.RAW_CAMERAS_LIST_DATA, (Serializable) cameras);
+        // A device-linking link is only honoured for an already logged-in user;
+        // pass it through so the camera list asks to confirm the authorization.
+        if (pendingUserCode != null) {
+            intent.putExtra(CamerasActivity.EXTRA_PENDING_USER_CODE, pendingUserCode);
+        }
         startActivity(intent);
         finish();
     }

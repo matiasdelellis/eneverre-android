@@ -53,6 +53,7 @@
     <string name="downloading_recording">Descargando la grabación…</string>
     <string name="recording_downloaded_soon">La grabación se descargará en breve…</string>
     <string name="link_device">Vincular dispositivo</string>
+    <string name="link_device_confirm">¿Autorizar este dispositivo con el código %1$s?</string>
     <string name="accept">Aceptar</string>
     <string name="linkDeviceMessage">Ingresa el código que aparece en la pantalla</string>
     <string name="device_linking_failed">No se pudo vincular el dispositivo</string>

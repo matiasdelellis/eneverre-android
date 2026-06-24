@@ -57,6 +57,7 @@
     <string name="downloading_recording">Downloading the recording…</string>
     <string name="recording_downloaded_soon">The recording will be downloaded soon…</string>
     <string name="link_device">Link device</string>
+    <string name="link_device_confirm">Authorize this device with code %1$s?</string>
     <string name="accept">Accept</string>
     <string name="linkDeviceMessage">Enter the code that appears on the screen</string>
     <string name="device_linking_failed">Device linking failed</string>
