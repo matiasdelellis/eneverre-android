@@ -30,7 +30,6 @@ import androidx.core.content.ContextCompat;
 import androidx.core.view.MenuProvider;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.Lifecycle;
-import androidx.media3.common.MediaItem;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.ui.PlayerView;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -38,6 +37,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.color.MaterialColors;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.snackbar.Snackbar;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,7 +52,7 @@ import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.Event;
 import ar.com.delellis.eneverre.api.model.EventsResponse;
 import ar.com.delellis.eneverre.api.model.Recording;
-import ar.com.delellis.eneverre.player.Media3Player;
+import ar.com.delellis.eneverre.player.GaplessPlaybackController;
 import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
 import ar.com.delellis.eneverre.util.AppPreferences;
@@ -79,27 +79,9 @@ public class PlaybackFragment extends Fragment {
 
     private View root;
 
-    private Media3Player player = null;
+    private GaplessPlaybackController controller = null;
     private PlayerView playerView = null;
 
-    /** One planned playback chunk: an absolute start and a duration, both in ms. */
-    private static final class Chunk {
-        final long startMs;
-        final long durationMs;
-        Chunk(long startMs, long durationMs) {
-            this.startMs = startMs;
-            this.durationMs = durationMs;
-        }
-    }
-
-    /**
-     * Full chunk plan for the current playback session, from the chosen moment
-     * forward. Cheap to hold; chunks are turned into player {@link MediaItem}s
-     * lazily as the queue is topped up.
-     */
-    private List<Chunk> chunks = null;
-    /** How many of the planned chunks have actually been queued into the player. */
-    private int enqueuedCount = 0;
     /** Moment to start playing once recordings finish loading (swipe-in resume). */
     private long pendingSeekMs = 0L;
 
@@ -164,82 +146,66 @@ public class PlaybackFragment extends Fragment {
         touchListener.setOnLongPressListener(new VideoTouchListener.OnLongPressListener() {
             @Override
             public void onLongPressStart() {
-                if (player != null) {
-                    player.setRate(2.0f);
+                if (controller != null) {
+                    controller.setRate(2.0f);
                     root.findViewById(R.id.speed_badge).setVisibility(VISIBLE);
                 }
             }
 
             @Override
             public void onLongPressEnd() {
-                if (player != null) {
-                    player.setRate(1.0f);
+                if (controller != null) {
+                    controller.setRate(1.0f);
                     root.findViewById(R.id.speed_badge).setVisibility(GONE);
                 }
             }
         });
         playerView.setOnTouchListener(touchListener);
 
-        player = new Media3Player(requireContext(), ApiClient.getInstance().getAuthorizationHeader());
-        player.setListener(new Media3Player.Listener() {
-            @Override
-            public void onBuffering(boolean buffering) {
-                root.findViewById(R.id.loading_progress).setVisibility(buffering ? VISIBLE : GONE);
-            }
+        controller = new GaplessPlaybackController(requireContext(),
+                ApiClient.getInstance().getAuthorizationHeader(), currentCamera.getId(),
+                new GaplessPlaybackController.Listener() {
+                    @Override
+                    public void onBuffering(boolean buffering) {
+                        root.findViewById(R.id.loading_progress).setVisibility(buffering ? VISIBLE : GONE);
+                    }
 
-            @Override
-            public void onProgress(int itemIndex, long positionMs) {
-                if (timelineSelecting) return;
-                if (chunks == null || itemIndex < 0 || itemIndex >= chunks.size()) return;
+                    @Override
+                    public void onRetryableError() {
+                        Snackbar.make(root, R.string.error_server, Snackbar.LENGTH_INDEFINITE)
+                                .setAction(R.string.retry, v -> {
+                                    if (controller != null) {
+                                        controller.retry();
+                                    }
+                                })
+                                .show();
+                    }
 
-                long newTime = chunks.get(itemIndex).startMs + positionMs;
-                lastTimeSelected = newTime;
-                timelineView.setCurrentWithAnimation(newTime);
+                    @Override
+                    public void onPositionMs(long absoluteMs) {
+                        if (timelineSelecting) return;
 
-                // Follow the event the timeline marks as current (highlight while
-                // it plays, clear once playback moves past it).
-                syncEventHighlight();
+                        lastTimeSelected = absoluteMs;
+                        timelineView.setCurrentWithAnimation(absoluteMs);
 
-                // Keep the shared moment current so swiping to another camera
-                // resumes here regardless of pause/resume ordering.
-                if (viewResumed) {
-                    setSharedPlaybackTime(newTime);
-                }
+                        // Follow the event the timeline marks as current (highlight
+                        // while it plays, clear once playback moves past it).
+                        syncEventHighlight();
 
-                if (startRecord > 0) {
-                    ArrayList<TimeRecord> fakeRecordingEvents = new ArrayList<TimeRecord>();
-                    long duration = newTime - startRecord - 100L;
-                    TimeRecord recordEvent = new TimeRecord(startRecord, duration, null);
-                    fakeRecordingEvents.add(recordEvent);
+                        // Keep the shared moment current so swiping to another camera
+                        // resumes here regardless of pause/resume ordering.
+                        if (viewResumed) {
+                            setSharedPlaybackTime(absoluteMs);
+                        }
 
-                    timelineView.setMajor1Records(fakeRecordingEvents);
-                }
-            }
-
-            @Override
-            public void onItemTransition(int itemIndex) {
-                // Crossed into a new chunk: keep the queue topped up so playback
-                // continues seamlessly past what's currently enqueued.
-                enqueueMoreIfNeeded(itemIndex);
-            }
-
-            @Override
-            public void onEnded() {
-                // Caught up to the end of the loaded recordings.
-                root.findViewById(R.id.loading_progress).setVisibility(GONE);
-            }
-
-            @Override
-            public void onError(@Nullable String message) {
-                Log.e(TAG, "Player error (skipping chunk): " + message);
-                // The player is about to skip past the failed chunk. If it was the
-                // tail of the queue (e.g. the last chunk before a recording gap),
-                // append the next recording's chunks first so there IS a next item
-                // to skip to — otherwise a transient 502 there would be mistaken
-                // for the end of the available footage.
-                enqueueNextBatch();
-            }
-        });
+                        if (startRecord > 0) {
+                            ArrayList<TimeRecord> fakeRecordingEvents = new ArrayList<TimeRecord>();
+                            long duration = absoluteMs - startRecord - 100L;
+                            fakeRecordingEvents.add(new TimeRecord(startRecord, duration, null));
+                            timelineView.setMajor1Records(fakeRecordingEvents);
+                        }
+                    }
+                });
 
         view.findViewById(R.id.record_button).setOnClickListener(v -> {
             FloatingActionButton fab = (FloatingActionButton) v;
@@ -275,7 +241,7 @@ public class PlaybackFragment extends Fragment {
         view.findViewById(R.id.take_snapshot).setOnClickListener(v -> takeSnapshot());
 
         if (prefs.isGlobalMute()) {
-            player.mute(true);
+            controller.mute(true);
         }
 
         timelineView.setOnTimelineListener(new TimelineView.OnTimelineListener() {
@@ -363,7 +329,7 @@ public class PlaybackFragment extends Fragment {
         super.onResume();
         viewResumed = true;
 
-        player.attachView(playerView);
+        controller.attach(playerView);
 
         // Resume at the time shared by the previous camera (so swiping cameras
         // keeps the same moment), falling back to this page's last position.
@@ -400,8 +366,8 @@ public class PlaybackFragment extends Fragment {
             }
         }
 
-        player.stop();
-        player.detachView(playerView);
+        controller.stop();
+        controller.detach(playerView);
     }
 
     private PlaybackTimeHost timeHost() {
@@ -423,9 +389,9 @@ public class PlaybackFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
-        if (player != null) {
-            player.release();
-            player = null;
+        if (controller != null) {
+            controller.release();
+            controller = null;
         }
         super.onDestroyView();
     }
@@ -447,22 +413,22 @@ public class PlaybackFragment extends Fragment {
         public boolean onMenuItemSelected(@NonNull MenuItem item) {
             int itemId = item.getItemId();
             if (itemId == R.id.volume_action) {
-                if (player.isMuted()) {
-                    player.mute(false);
+                if (controller.isMuted()) {
+                    controller.mute(false);
                     prefs.setGlobalMute(false);
                     item.setIcon(R.drawable.ic_volume_24);
                 } else {
-                    player.mute(true);
+                    controller.mute(true);
                     prefs.setGlobalMute(true);
                     item.setIcon(R.drawable.ic_muted_24);
                 }
                 return true;
             } else if (itemId == R.id.pause_action) {
-                if (player.isPaused()) {
-                    player.resume();
+                if (controller.isPaused()) {
+                    controller.resume();
                     item.setIcon(R.drawable.ic_pause_24);
                 } else {
-                    player.pause();
+                    controller.pause();
                     item.setIcon(R.drawable.ic_play_24);
                 }
                 return true;
@@ -519,103 +485,23 @@ public class PlaybackFragment extends Fragment {
                 && !timelineView.getBackgroundRecords().isEmpty();
     }
 
-    /** Each queued playback request spans at most this many ms. */
-    private static final long CHUNK_MS = 10_000L;
-    /** Chunks queued into the player up front when playback starts. */
-    private static final int INITIAL_CHUNKS = 18; // ~3 min
-    /** Chunks appended each time the queue is topped up. */
-    private static final int BATCH_CHUNKS = 12; // ~2 min
-    /** Top up the queue once playback gets this close to its tail. */
-    private static final int PREFETCH_THRESHOLD = 6; // ~1 min ahead
-
     /**
-     * Starts (gapless) playback from {@code timeMs}: builds a chunk plan over the
-     * loaded recordings (from that moment forward), queues the first chunks, and
-     * lets ExoPlayer transition through them with no gap. The rest of the plan is
-     * appended on the fly as playback advances (see {@link #enqueueMoreIfNeeded}),
-     * so the live playlist stays small regardless of how long the span is.
-     *
-     * <p>Replaces VLC's fixed-window + restart-on-EndReached approach, which tore
-     * down and rebuilt the pipeline at each boundary (the source of the gaps).
-     * Chunks are kept small because the backend generates each clip on demand and
-     * 502s on very long playback windows; pre-queuing them is what keeps playback
-     * gapless despite the small requests.
+     * Starts gapless playback from {@code timeMs} over the loaded recordings. The
+     * {@link GaplessPlaybackController} owns the chunk planning and queueing; here
+     * we only feed it the recordings and report when there's nothing to play.
      */
     private void playFrom(long timeMs) {
         // Never play from a non-visible page (a neighbour in the pager).
-        if (player == null || !viewResumed) {
+        if (controller == null || !viewResumed) {
             return;
         }
         ArrayList<TimeRecord> records = (timelineView != null) ? timelineView.getBackgroundRecords() : null;
         if (records == null || records.isEmpty()) {
             return;
         }
-
-        // Recordings ascending by start, so the plan plays forward in time.
-        ArrayList<TimeRecord> ordered = new ArrayList<>(records);
-        Collections.sort(ordered, (a, b) -> Long.compare(a.timestampMsec, b.timestampMsec));
-
-        // Plan every chunk up front (cheap); MediaItems are built lazily from this
-        // plan as the queue is topped up.
-        chunks = new ArrayList<>();
-        for (TimeRecord tr : ordered) {
-            long segStart = tr.timestampMsec;
-            long segEnd = segStart + tr.durationMsec;
-            if (segEnd <= timeMs) {
-                continue; // segment entirely before the requested moment
-            }
-            // First relevant recording starts exactly at timeMs; later ones at
-            // their own start (timeMs is already behind them).
-            long pos = Math.max(segStart, timeMs);
-            while (pos < segEnd) {
-                long chunkMs = Math.min(CHUNK_MS, segEnd - pos);
-                chunks.add(new Chunk(pos, chunkMs));
-                pos += chunkMs;
-            }
-        }
-
-        if (chunks.isEmpty()) {
+        if (!controller.playFrom(records, timeMs)) {
             Toast.makeText(requireContext(), R.string.there_is_no_recording, LENGTH_LONG).show();
-            return;
         }
-
-        // First chunk starts exactly at timeMs, so no per-item seek is needed.
-        int first = Math.min(INITIAL_CHUNKS, chunks.size());
-        player.setPlaylist(buildItems(0, first), 0, 0);
-        enqueuedCount = first;
-    }
-
-    /** Builds {@link MediaItem}s for chunk plan indices {@code [from, to)}. */
-    private List<MediaItem> buildItems(int from, int to) {
-        String camId = currentCamera.getId();
-        List<MediaItem> items = new ArrayList<>(to - from);
-        for (int i = from; i < to; i++) {
-            Chunk chunk = chunks.get(i);
-            String url = ApiClient.getInstance().getPlaybackStreamUrl(camId, Time.MStoRFC3339(chunk.startMs), chunk.durationMs / 1000.0);
-            items.add(MediaItem.fromUri(url));
-        }
-        return items;
-    }
-
-    /**
-     * Appends the next batch of planned chunks once playback nears the tail of the
-     * queue, so it continues seamlessly. No-op once the whole plan is queued.
-     */
-    private void enqueueMoreIfNeeded(int currentIndex) {
-        if (currentIndex < enqueuedCount - PREFETCH_THRESHOLD) {
-            return; // still comfortably ahead
-        }
-        enqueueNextBatch();
-    }
-
-    /** Appends the next plan batch to the player. No-op once the plan is exhausted. */
-    private void enqueueNextBatch() {
-        if (player == null || chunks == null || enqueuedCount >= chunks.size()) {
-            return;
-        }
-        int to = Math.min(enqueuedCount + BATCH_CHUNKS, chunks.size());
-        player.addMediaItems(buildItems(enqueuedCount, to));
-        enqueuedCount = to;
     }
 
     private void downloadPlayback(String startRFC333, double duration) {

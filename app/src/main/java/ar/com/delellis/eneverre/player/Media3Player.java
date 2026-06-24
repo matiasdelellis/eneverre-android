@@ -11,8 +11,10 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
 import androidx.media3.ui.PlayerView;
 
 import java.util.HashMap;
@@ -48,19 +50,19 @@ public class Media3Player {
         void onItemTransition(int itemIndex);
         /** Reached the end of the whole playlist. */
         void onEnded();
-        void onError(@Nullable String message);
+        /**
+         * A load failed. {@code httpCode} is the HTTP status if it was an HTTP
+         * error ({@code -1} otherwise); {@code nextAvailable} is the value of the
+         * server's {@code x-next-available} header when present (the next servable
+         * timestamp).
+         */
+        void onError(int httpCode, @Nullable String nextAvailable, @Nullable String message);
     }
-
-    /** Give up after this many bad items in a row (otherwise a dead stream could spin). */
-    private static final int MAX_CONSECUTIVE_ERRORS = 5;
 
     private final ExoPlayer player;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Listener listener = null;
     private float volume = 1.0f;
-    private int consecutiveErrors = 0;
-    /** Playlist index already retried once after an error (so it's only retried once). */
-    private int lastRetryIndex = -1;
 
     private final Runnable progressTick = new Runnable() {
         @Override
@@ -79,10 +81,21 @@ public class Media3Player {
         }
         DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
                 .setAllowCrossProtocolRedirects(true)
+                // The backend assembles each window on demand and can be slow to
+                // respond to a freshly-seeked position; the 8s default times out too
+                // eagerly while scrubbing.
+                .setConnectTimeoutMs(15_000)
+                .setReadTimeoutMs(15_000)
                 .setDefaultRequestProperties(headers);
 
+        // Keep ExoPlayer's own load retries low: a 502 here usually means a real
+        // recording gap, so the controller's recovery (probe forward / skip) should
+        // drive the response instead of ExoPlayer hammering the same dead request.
+        DefaultMediaSourceFactory mediaSourceFactory = new DefaultMediaSourceFactory(httpFactory)
+                .setLoadErrorHandlingPolicy(new DefaultLoadErrorHandlingPolicy(1));
+
         player = new ExoPlayer.Builder(context)
-                .setMediaSourceFactory(new DefaultMediaSourceFactory(httpFactory))
+                .setMediaSourceFactory(mediaSourceFactory)
                 .build();
 
         player.addListener(new Player.Listener() {
@@ -92,8 +105,6 @@ public class Media3Player {
                 if (state == Player.STATE_BUFFERING) {
                     listener.onBuffering(true);
                 } else if (state == Player.STATE_READY) {
-                    consecutiveErrors = 0; // a healthy item clears the skip counter
-                    lastRetryIndex = -1;   // ...and lets the next failure retry afresh
                     listener.onBuffering(false);
                 } else if (state == Player.STATE_ENDED) {
                     listener.onBuffering(false);
@@ -110,28 +121,22 @@ public class Media3Player {
 
             @Override
             public void onPlayerError(PlaybackException error) {
+                // Mechanism only: surface the HTTP status and the server's
+                // x-next-available hint; the owner decides how to recover (jump,
+                // probe, stop). Recovery is driven via seekToItem()/prepare().
+                int httpCode = -1;
+                String nextAvailable = null;
+                for (Throwable t = error; t != null; t = t.getCause()) {
+                    if (t instanceof HttpDataSource.InvalidResponseCodeException) {
+                        HttpDataSource.InvalidResponseCodeException http =
+                                (HttpDataSource.InvalidResponseCodeException) t;
+                        httpCode = http.responseCode;
+                        nextAvailable = firstHeader(http.headerFields, "x-next-available");
+                        break;
+                    }
+                }
                 if (listener != null) {
-                    listener.onError(error.getMessage());
-                }
-
-                int index = player.getCurrentMediaItemIndex();
-
-                // First failure on this chunk: retry it once in place (a transient
-                // 502 often succeeds on a second try, and this avoids skipping the
-                // ~10s of footage the chunk holds).
-                if (index != lastRetryIndex) {
-                    lastRetryIndex = index;
-                    player.prepare(); // recover the player out of the error/idle state
-                    return;
-                }
-
-                // Retried and it failed again: a single bad chunk shouldn't kill
-                // the whole session, so skip past it and resume on the next one.
-                // Bail only if too many fail back-to-back.
-                consecutiveErrors++;
-                if (consecutiveErrors <= MAX_CONSECUTIVE_ERRORS && player.hasNextMediaItem()) {
-                    player.seekToNextMediaItem();
-                    player.prepare(); // recover the player out of the error/idle state
+                    listener.onError(httpCode, nextAvailable, error.getMessage());
                 }
             }
         });
@@ -139,6 +144,21 @@ public class Media3Player {
 
     public void setListener(Listener listener) {
         this.listener = listener;
+    }
+
+    /** First value of {@code name} in {@code headers}, matched case-insensitively, or null. */
+    @Nullable
+    private static String firstHeader(@Nullable Map<String, List<String>> headers, String name) {
+        if (headers == null) {
+            return null;
+        }
+        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+            if (name.equalsIgnoreCase(entry.getKey())) {
+                List<String> values = entry.getValue();
+                return (values != null && !values.isEmpty()) ? values.get(0) : null;
+            }
+        }
+        return null;
     }
 
     public void attachView(PlayerView view) {
@@ -154,8 +174,6 @@ public class Media3Player {
      * The remaining items play gapless after it.
      */
     public void setPlaylist(List<MediaItem> items, int startIndex, long startPositionMs) {
-        consecutiveErrors = 0;
-        lastRetryIndex = -1;
         player.setMediaItems(items, startIndex, startPositionMs);
         player.prepare();
         player.setPlayWhenReady(true);
@@ -165,6 +183,45 @@ public class Media3Player {
     /** Appends more items to the end of the current playlist (gapless continuation). */
     public void addMediaItems(List<MediaItem> items) {
         player.addMediaItems(items);
+    }
+
+    /**
+     * Advances into the next item and resumes, if there is one. Used to recover
+     * from {@code STATE_ENDED} after more items were appended, since ExoPlayer
+     * stays ended (frozen on the last frame) until told to move on.
+     */
+    public void continueToNextIfAvailable() {
+        if (player.hasNextMediaItem()) {
+            player.seekToNextMediaItem();
+            player.play();
+        }
+    }
+
+    public int getCurrentIndex() {
+        return player.getCurrentMediaItemIndex();
+    }
+
+    /** Replaces the item at {@code index} (e.g. to rebuild a chunk from a new start). */
+    public void replaceItem(int index, MediaItem item) {
+        player.replaceMediaItem(index, item);
+    }
+
+    /** Drops every item after {@code index} (used when the plan past it is rebuilt). */
+    public void removeAfter(int index) {
+        int count = player.getMediaItemCount();
+        if (index + 1 < count) {
+            player.removeMediaItems(index + 1, count);
+        }
+    }
+
+    /**
+     * Jumps to the given playlist item (start of it) and resumes playing,
+     * recovering the player if it was left in an error/idle state.
+     */
+    public void seekToItem(int index) {
+        player.seekTo(index, 0);
+        player.prepare(); // required to leave STATE_IDLE after an error
+        player.play();
     }
 
     public void stop() {

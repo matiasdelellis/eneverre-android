@@ -35,8 +35,18 @@ public class VlcPlayer {
             currentMedia = null;
         }
 
-        mediaPlayer.detachViews();
-        mediaPlayer.release();
+        if (mediaPlayer != null) {
+            mediaPlayer.detachViews();
+            mediaPlayer.release();
+            mediaPlayer = null;
+        }
+
+        // The LibVLC instance owns native resources too; without releasing it the
+        // finalizer trips "LibVLC finalized but not natively released (1 refs)".
+        if (libVlc != null) {
+            libVlc.release();
+            libVlc = null;
+        }
     }
 
     public void attachView(VLCVideoLayout videoLayout) {

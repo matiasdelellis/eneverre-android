@@ -30,6 +30,7 @@
     <string name="error_unauthorized">Usuario o contraseña inválidos</string>
     <string name="error_server">El servidor informó un error</string>
     <string name="error_unexpected">Error inesperado</string>
+    <string name="retry">Reintentar</string>
     <string name="there_is_no_recording">No hay grabación</string>
     <string name="events">Eventos</string>
     <string name="event_motion">Movimiento</string>
