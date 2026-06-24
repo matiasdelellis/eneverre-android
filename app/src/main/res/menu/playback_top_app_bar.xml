@@ -6,26 +6,22 @@
         android:id="@+id/pause_action"
         android:icon="@drawable/ic_pause_24"
         android:title="@string/pause"
-        android:contentDescription="@string/todo"
         app:showAsAction="ifRoom" />
 
     <item
         android:id="@+id/volume_action"
         android:icon="@drawable/ic_volume_24"
         android:title="@string/mute"
-        android:contentDescription="@string/todo"
         app:showAsAction="ifRoom" />
 
     <item
         android:id="@+id/go_to_datetime"
         android:title="@string/go_date_and_time"
-        android:contentDescription="@string/todo"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/share_moment"
         android:title="@string/share_this_moment"
-        android:contentDescription="@string/todo"
         app:showAsAction="never" />
 
 </menu>

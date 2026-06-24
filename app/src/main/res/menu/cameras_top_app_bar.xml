@@ -5,13 +5,11 @@
     <item
         android:id="@+id/linkDevice"
         android:title="@string/link_device"
-        android:contentDescription="@string/todo"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/about"
         android:title="@string/about_eneverre"
-        android:contentDescription="@string/todo"
         app:showAsAction="never" />
 
 </menu>

@@ -80,7 +80,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_centerInParent="true"
-                android:contentDescription="@string/todo"
+                android:contentDescription="@string/ptz_recenter"
                 android:src="@drawable/ic_home_24" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -90,7 +90,7 @@
                 android:layout_above="@+id/ptz_home_button"
                 android:layout_centerHorizontal="true"
                 android:layout_margin="25dp"
-                android:contentDescription="@string/todo"
+                android:contentDescription="@string/ptz_move_up"
                 android:src="@drawable/ic_chevron_up_24" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -100,7 +100,7 @@
                 android:layout_below="@+id/ptz_home_button"
                 android:layout_centerHorizontal="true"
                 android:layout_margin="25dp"
-                android:contentDescription="@string/todo"
+                android:contentDescription="@string/ptz_move_down"
                 android:src="@drawable/ic_chevron_down_24" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -110,7 +110,7 @@
                 android:layout_centerVertical="true"
                 android:layout_margin="25dp"
                 android:layout_toLeftOf="@+id/ptz_home_button"
-                android:contentDescription="@string/todo"
+                android:contentDescription="@string/ptz_move_left"
                 android:src="@drawable/ic_chevron_left_24" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -120,7 +120,7 @@
                 android:layout_centerVertical="true"
                 android:layout_margin="25dp"
                 android:layout_toRightOf="@+id/ptz_home_button"
-                android:contentDescription="@string/todo"
+                android:contentDescription="@string/ptz_move_right"
                 android:src="@drawable/ic_chevron_right_24" />
 
         </RelativeLayout>

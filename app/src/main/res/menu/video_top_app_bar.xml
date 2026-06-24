@@ -6,27 +6,23 @@
         android:id="@+id/privacy_action"
         android:icon="@drawable/ic_privacy_24"
         android:title="@string/enter_privacy_mode"
-        android:contentDescription="@string/todo"
         app:showAsAction="ifRoom" />
 
     <item
         android:id="@+id/pip_action"
         android:icon="@drawable/ic_pip_24"
         android:title="@string/picture_in_picture"
-        android:contentDescription="@string/todo"
         app:showAsAction="ifRoom" />
 
     <item
         android:id="@+id/volume_action"
         android:icon="@drawable/ic_volume_24"
         android:title="@string/mute"
-        android:contentDescription="@string/todo"
         app:showAsAction="ifRoom" />
 
     <item
         android:id="@+id/recalibrate_ptz"
         android:title="@string/recalibrate_position"
-        android:contentDescription="@string/todo"
         app:showAsAction="never" />
 
 </menu>

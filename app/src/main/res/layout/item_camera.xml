@@ -23,7 +23,7 @@
             android:id="@+id/camera_image"
             android:layout_width="32dp"
             android:layout_height="32dp"
-            android:contentDescription="@string/todo"
+            android:contentDescription="@string/camera"
             android:src="@drawable/ic_image_24"/>
 
         <TextView

@@ -1,17 +1,17 @@
 <resources>
     <string name="app_name">Eneverre</string>
-    <string name="prompt_email">Email</string>
-    <string name="prompt_password">Password</string>
-    <string name="action_sign_in_short">Sign in</string>
-    <string name="login_failed">"Login failed"</string>
     <string name="loginLabel">Login</string>
     <string name="passwordHint">Password</string>
     <string name="usernameHint">Username</string>
     <string name="serverHint">https://</string>
     <string name="required_configuration">Required configuration</string>
     <string name="live_view">Live view</string>
-    <string name="todo">TODO</string>
     <string name="camera">Camera</string>
+    <string name="ptz_recenter">Recenter camera</string>
+    <string name="ptz_move_up">Move camera up</string>
+    <string name="ptz_move_down">Move camera down</string>
+    <string name="ptz_move_left">Move camera left</string>
+    <string name="ptz_move_right">Move camera right</string>
     <string name="reconnect">Reconnect</string>
     <string name="more_options">More options</string>
     <string name="mute">Mute</string>
@@ -24,7 +24,6 @@
     <string name="playback_speed_2x">2×</string>
     <string name="live">Live</string>
     <string name="pause">Pause</string>
-    <string name="reproduction_and_events">Reproduction and events</string>
     <string name="download_30_seconds">Download 30 seconds</string>
     <string name="downloading">Downloading…</string>
     <string name="error_download">Failed to download the playback</string>
@@ -36,7 +35,7 @@
     <string name="error_unexpected">Unexpected error</string>
     <string name="there_is_no_recording">There is no recording</string>
     <string name="events">Events</string>
-    <string name="event_motion">Movement</string>
+    <string name="event_motion">Motion</string>
     <string name="event_unknown">Event</string>
     <string name="no_events">There are no events for this camera</string>
     <string name="error_get_events">Failed to get camera events</string>
@@ -50,7 +49,7 @@
     <string name="privacy_disabled">Privacy mode disabled</string>
     <string name="cancel">Cancel</string>
     <string name="go">Go</string>
-    <string name="go_date_and_time">Go to a date and time</string>
+    <string name="go_date_and_time">Jump to date and time</string>
     <string name="looking_for_previous_recordings">Looking for previous recordings…</string>
     <string name="today">Today</string>
     <string name="yesterday">Yesterday</string>
