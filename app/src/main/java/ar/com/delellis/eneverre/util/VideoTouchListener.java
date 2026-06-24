@@ -8,6 +8,18 @@ import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 
+/**
+ * Touch handler for a video surface: pinch-to-zoom, drag-to-pan while zoomed,
+ * double-tap to toggle 1x/2x, and press-and-hold to fast-forward. It operates on
+ * whatever {@link View} it is attached to (the one delivered to {@link #onTouch}),
+ * so usage is just:
+ *
+ * <pre>{@code
+ * VideoTouchListener l = new VideoTouchListener();
+ * l.setOnLongPressListener(...);
+ * videoView.setOnTouchListener(l);
+ * }</pre>
+ */
 public class VideoTouchListener implements View.OnTouchListener {
 
     /** Notified when the user presses and holds on the video, and when they release. */
@@ -27,50 +39,50 @@ public class VideoTouchListener implements View.OnTouchListener {
     private int maxScrollX = 0;
     private int maxScrollY = 0;
 
-    private final View vlcVideoLayout;
+    /** The view currently being touched; valid for the duration of an onTouch pass. */
+    private View videoView;
 
-    private final GestureDetector gestureDetector;
+    /** Created lazily on the first touch (it needs a Context from the view). */
+    private GestureDetector gestureDetector;
     private OnLongPressListener longPressListener = null;
     private boolean longPressActive = false;
-
-    public VideoTouchListener(View view) {
-        vlcVideoLayout = view;
-        gestureDetector = new GestureDetector(view.getContext(), new GestureDetector.SimpleOnGestureListener() {
-            @Override
-            public boolean onDown(MotionEvent e) {
-                return true;
-            }
-
-            @Override
-            public void onLongPress(MotionEvent e) {
-                // A still single-finger hold is the fast-forward gesture; ignore
-                // it while pinching. The detector already cancels it if the finger
-                // moves (drag-to-pan / swipe-to-page), so those don't trigger it.
-                if (touchMode == ZOOM || longPressListener == null) {
-                    return;
-                }
-                longPressActive = true;
-                longPressListener.onLongPressStart();
-            }
-
-            @Override
-            public boolean onDoubleTap(MotionEvent e) {
-                // Toggle between fit (1x) and 2x, centering the zoom on the tapped
-                // point. Any in-progress hold is cancelled so it doesn't stick.
-                endLongPress();
-                if (currentScale > 1f) {
-                    applyScale(1f, e.getX(), e.getY());
-                } else {
-                    applyScale(2f, e.getX(), e.getY());
-                }
-                return true;
-            }
-        });
-    }
 
     public void setOnLongPressListener(OnLongPressListener listener) {
         longPressListener = listener;
     }
+
+    private final GestureDetector.SimpleOnGestureListener gestureListener =
+            new GestureDetector.SimpleOnGestureListener() {
+                @Override
+                public boolean onDown(MotionEvent e) {
+                    return true;
+                }
+
+                @Override
+                public void onLongPress(MotionEvent e) {
+                    // A still single-finger hold is the fast-forward gesture; ignore
+                    // it while pinching. The detector already cancels it if the finger
+                    // moves (drag-to-pan / swipe-to-page), so those don't trigger it.
+                    if (touchMode == ZOOM || longPressListener == null) {
+                        return;
+                    }
+                    longPressActive = true;
+                    longPressListener.onLongPressStart();
+                }
+
+                @Override
+                public boolean onDoubleTap(MotionEvent e) {
+                    // Toggle between fit (1x) and 2x, centering the zoom on the tapped
+                    // point. Any in-progress hold is cancelled so it doesn't stick.
+                    endLongPress();
+                    if (currentScale > 1f) {
+                        applyScale(1f, e.getX(), e.getY());
+                    } else {
+                        applyScale(2f, e.getX(), e.getY());
+                    }
+                    return true;
+                }
+            };
 
     private void endLongPress() {
         if (longPressActive) {
@@ -84,6 +96,10 @@ public class VideoTouchListener implements View.OnTouchListener {
     @Override
     @SuppressLint("ClickableViewAccessibility")
     public boolean onTouch(View v, MotionEvent event) {
+        videoView = v;
+        if (gestureDetector == null) {
+            gestureDetector = new GestureDetector(v.getContext(), gestureListener);
+        }
         gestureDetector.onTouchEvent(event);
 
         switch (event.getAction() & MotionEvent.ACTION_MASK) {
@@ -120,14 +136,14 @@ public class VideoTouchListener implements View.OnTouchListener {
                     v.getParent().requestDisallowInterceptTouchEvent(true);
                     float dx = (event.getRawX() - lastEvent.x) / currentScale;
                     float dy = (event.getRawY() - lastEvent.y) / currentScale;
-                    vlcVideoLayout.setScrollX(vlcVideoLayout.getScrollX() - (int) dx);
-                    vlcVideoLayout.setScrollY(vlcVideoLayout.getScrollY() - (int) dy);
+                    v.setScrollX(v.getScrollX() - (int) dx);
+                    v.setScrollY(v.getScrollY() - (int) dy);
                     clampScroll();
 
                     lastEvent.set(event.getRawX(), event.getRawY());
                 } else if (touchMode == ZOOM) {
                     float newDistance = getPinchDistance(event);
-                    setScale(vlcVideoLayout.getScaleX() * (newDistance / lastDistance));
+                    setScale(v.getScaleX() * (newDistance / lastDistance));
                     clampScroll();
                 }
                 break;
@@ -138,24 +154,24 @@ public class VideoTouchListener implements View.OnTouchListener {
     }
 
     /**
-     * Applies the clamped scale to the layout and recomputes the pan bounds.
+     * Applies the clamped scale to the view and recomputes the pan bounds.
      * The caller is responsible for positioning (and clamping) the scroll.
      */
     private void setScale(float scale) {
         currentScale = clamp(scale, 1.0f, 9f);
 
-        vlcVideoLayout.setScaleX(currentScale);
-        vlcVideoLayout.setScaleY(currentScale);
+        videoView.setScaleX(currentScale);
+        videoView.setScaleY(currentScale);
 
         // D'Oh!. Took me a week to discover this math.
-        maxScrollX = (int) ((currentScale - 1f) * vlcVideoLayout.getWidth() / (2 * currentScale));
-        maxScrollY = (int) ((currentScale - 1f) * vlcVideoLayout.getHeight() / (2 * currentScale));
+        maxScrollX = (int) ((currentScale - 1f) * videoView.getWidth() / (2 * currentScale));
+        maxScrollY = (int) ((currentScale - 1f) * videoView.getHeight() / (2 * currentScale));
     }
 
     /** Clamps the current pan to the bounds computed by {@link #setScale}. */
     private void clampScroll() {
-        vlcVideoLayout.setScrollX(clamp(vlcVideoLayout.getScrollX(), -maxScrollX, maxScrollX));
-        vlcVideoLayout.setScrollY(clamp(vlcVideoLayout.getScrollY(), -maxScrollY, maxScrollY));
+        videoView.setScrollX(clamp(videoView.getScrollX(), -maxScrollX, maxScrollX));
+        videoView.setScrollY(clamp(videoView.getScrollY(), -maxScrollY, maxScrollY));
     }
 
     /**
@@ -166,11 +182,11 @@ public class VideoTouchListener implements View.OnTouchListener {
         setScale(scale);
 
         float factor = (currentScale - 1f) / currentScale;
-        vlcVideoLayout.setScrollX((int) ((focusX - vlcVideoLayout.getWidth() / 2f) * factor));
-        vlcVideoLayout.setScrollY((int) ((focusY - vlcVideoLayout.getHeight() / 2f) * factor));
+        videoView.setScrollX((int) ((focusX - videoView.getWidth() / 2f) * factor));
+        videoView.setScrollY((int) ((focusY - videoView.getHeight() / 2f) * factor));
         clampScroll();
 
-        vlcVideoLayout.getParent().requestDisallowInterceptTouchEvent(currentScale > 1f);
+        videoView.getParent().requestDisallowInterceptTouchEvent(currentScale > 1f);
     }
 
     private float getPinchDistance(MotionEvent event) {

@@ -150,7 +150,7 @@ public class PlaybackFragment extends Fragment {
 
         playerView = view.findViewById(R.id.player_view);
         playerView.setUseController(false);
-        VideoTouchListener touchListener = new VideoTouchListener(playerView);
+        VideoTouchListener touchListener = new VideoTouchListener();
         // Press and hold on the video to fast-forward at 2x; release to resume 1x.
         touchListener.setOnLongPressListener(new VideoTouchListener.OnLongPressListener() {
             @Override

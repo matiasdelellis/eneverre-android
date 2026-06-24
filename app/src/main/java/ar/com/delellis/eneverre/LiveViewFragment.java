@@ -158,7 +158,7 @@ public class LiveViewFragment extends Fragment {
         setPtzEnabled(currentCamera.getPtz());
 
         vlcVideoLayout = view.findViewById(R.id.vlc_video_Layout);
-        vlcVideoLayout.setOnTouchListener(new VideoTouchListener(vlcVideoLayout));
+        vlcVideoLayout.setOnTouchListener(new VideoTouchListener());
 
         view.findViewById(R.id.reconnect_button).setVisibility(GONE);
         view.findViewById(R.id.reconnect_button).setOnClickListener(v -> {

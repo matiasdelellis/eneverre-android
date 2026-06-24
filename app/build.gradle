@@ -106,6 +106,8 @@ android {
 
 dependencies {
     implementation libs.libvlc
+    implementation libs.media3.exoplayer
+    implementation libs.media3.ui
     implementation libs.retrofit
     implementation libs.retrofit.converter.gson
     implementation libs.okhttp
