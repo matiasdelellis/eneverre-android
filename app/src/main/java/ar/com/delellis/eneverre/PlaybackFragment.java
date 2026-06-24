@@ -391,6 +391,10 @@ public class PlaybackFragment extends Fragment {
             if (prefs.isGlobalMute()) {
                 menu.findItem(R.id.volume_action).setIcon(R.drawable.ic_muted_24);
             }
+            // Sharing is only meaningful on a fixed https build (see shareMoment).
+            if (!BuildConfig.API_HOST.startsWith("https://")) {
+                menu.findItem(R.id.share_moment).setVisible(false);
+            }
         }
 
         @Override
@@ -427,6 +431,9 @@ public class PlaybackFragment extends Fragment {
                     String start = Time.MStoRFC3339(lastTimeSelected);
                     startPlayback(start, 30.0);
                 });
+                return true;
+            } else if (itemId == R.id.share_moment) {
+                shareMoment(timelineView.getCurrent());
                 return true;
             }
             return false;
@@ -624,7 +631,7 @@ public class PlaybackFragment extends Fragment {
                     downloadEvent(event, startMsec);
                     return true;
                 case 3:
-                    shareEvent(startMsec);
+                    shareMoment(startMsec);
                     return true;
                 default:
                     return false;
@@ -633,14 +640,14 @@ public class PlaybackFragment extends Fragment {
         popup.show();
     }
 
-    /** Shares a link to the event (host + camera + moment) via any app. */
-    private void shareEvent(long startMsec) {
+    /** Shares a link (host + camera + moment) to the given time via any app. */
+    private void shareMoment(long timeMs) {
         String host = SecureStore.getInstance(requireContext()).getConfigHost();
-        if (host == null) {
+        if (host == null || timeMs <= 0) {
             return;
         }
 
-        String link = EventShareLink.build(host, currentCamera.getId(), startMsec);
+        String link = EventShareLink.build(host, currentCamera.getId(), timeMs);
 
         Intent send = new Intent(Intent.ACTION_SEND);
         send.setType("text/plain");

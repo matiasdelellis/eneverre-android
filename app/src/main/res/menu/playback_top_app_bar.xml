@@ -22,4 +22,10 @@
         android:contentDescription="@string/todo"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/share_moment"
+        android:title="@string/share_this_moment"
+        android:contentDescription="@string/todo"
+        app:showAsAction="never" />
+
 </menu>
