@@ -37,6 +37,26 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Shared event links (e.g. sent over WhatsApp). The distinctive
+                 path avoids hijacking other links; the recipient's credentials
+                 gate the actual access. Sharing is only offered on fixed-API_HOST
+                 builds, so appLinkHost is the baked host; on user-typed-host
+                 builds it is "*" and inert (no link is ever produced).
+
+                 https only: with a fixed https API_HOST, appLinkAutoVerify is
+                 "true", so this is a *verified* App Link that opens without the
+                 browser (needs assetlinks.json on that host). -->
+            <intent-filter android:autoVerify="${appLinkAutoVerify}">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="https" />
+                <data android:host="${appLinkHost}" />
+                <data android:pathPrefix="/share/event" />
+            </intent-filter>
         </activity>
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -1,8 +1,29 @@
+import java.net.URI
+
 plugins {
     alias(libs.plugins.android.application)
 }
 
 def apiHostProp = project.findProperty("API_HOST") ?: ""
+
+// Shared-event deep links use the backend host as their domain. When the app is
+// built with a fixed https API_HOST the host is known at build time, so it can
+// be a *verified* Android App Link (auto-opens, no browser). With a user-typed
+// host we match any host but cannot verify (the system shows the chooser / asks
+// the user to enable the link). See AndroidManifest's https intent-filter.
+def appLinkHost = "*"
+def appLinkAutoVerify = "false"
+if (!apiHostProp.isEmpty()) {
+    try {
+        def parsed = new URI(apiHostProp)
+        if (parsed.host != null) {
+            appLinkHost = parsed.host
+            appLinkAutoVerify = (parsed.scheme == "https") ? "true" : "false"
+        }
+    } catch (Exception ignored) {
+        // Malformed API_HOST: fall back to the unverified wildcard.
+    }
+}
 
 def storeFileProp = project.findProperty("STORE_FILE")
 def storePasswordProp = project.findProperty("STORE_PASSWORD")
@@ -24,6 +45,11 @@ android {
         versionName "0.2"
 
         buildConfigField "String", "API_HOST", "\"${apiHostProp}\""
+
+        manifestPlaceholders = [
+                appLinkHost      : appLinkHost,
+                appLinkAutoVerify: appLinkAutoVerify
+        ]
     }
 
     signingConfigs {

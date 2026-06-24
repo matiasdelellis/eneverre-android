@@ -67,5 +67,7 @@
     <string name="share">Share</string>
     <string name="download">Download</string>
     <string name="play">Play</string>
+    <string name="share_event_message">Watch this event: %1$s</string>
+    <string name="shared_event_unavailable">You don\'t have access to this event</string>
     <string name="open">Open</string>
 </resources>

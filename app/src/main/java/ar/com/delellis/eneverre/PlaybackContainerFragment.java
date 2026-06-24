@@ -24,6 +24,7 @@ public class PlaybackContainerFragment extends Fragment implements PlaybackTimeH
 
     private static final String ARG_LOCATION = "location";
     private static final String ARG_SELECTED = "selected";
+    private static final String ARG_INITIAL_TIME = "initial_time";
 
     private ViewPager2 viewPager;
     private Location location;
@@ -43,10 +44,16 @@ public class PlaybackContainerFragment extends Fragment implements PlaybackTimeH
     }
 
     public static PlaybackContainerFragment newInstance(Location location, int selected) {
+        return newInstance(location, selected, 0L);
+    }
+
+    /** {@code initialTimeMs > 0} seeds the shared moment so pages open there. */
+    public static PlaybackContainerFragment newInstance(Location location, int selected, long initialTimeMs) {
         PlaybackContainerFragment fragment = new PlaybackContainerFragment();
         Bundle args = new Bundle();
         args.putSerializable(ARG_LOCATION, location);
         args.putInt(ARG_SELECTED, selected);
+        args.putLong(ARG_INITIAL_TIME, initialTimeMs);
         fragment.setArguments(args);
         return fragment;
     }
@@ -72,6 +79,13 @@ public class PlaybackContainerFragment extends Fragment implements PlaybackTimeH
 
         location = (Location) requireArguments().getSerializable(ARG_LOCATION);
         int selected = requireArguments().getInt(ARG_SELECTED, 0);
+
+        // Seed the shared moment once (e.g. a shared event link) so the first
+        // page opens there. Honoured only before any page sets its own time.
+        long initialTime = requireArguments().getLong(ARG_INITIAL_TIME, 0L);
+        if (initialTime > 0 && sharedTimeMs <= 0) {
+            sharedTimeMs = initialTime;
+        }
 
         viewPager = view.findViewById(R.id.viewPager);
         viewPager.setAdapter(new PlaybackPagerAdapter(this, location));

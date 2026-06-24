@@ -5,6 +5,7 @@ import static android.view.View.VISIBLE;
 import static android.widget.Toast.LENGTH_LONG;
 import static android.widget.Toast.LENGTH_SHORT;
 
+import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -56,6 +57,8 @@ import ar.com.delellis.eneverre.util.ApiError;
 import ar.com.delellis.eneverre.util.AppPreferences;
 import ar.com.delellis.eneverre.util.DateTimePickerDialog;
 import ar.com.delellis.eneverre.util.Download;
+import ar.com.delellis.eneverre.util.EventShareLink;
+import ar.com.delellis.eneverre.util.SecureStore;
 import ar.com.delellis.eneverre.util.Snapshot;
 import ar.com.delellis.eneverre.util.Time;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
@@ -606,6 +609,12 @@ public class PlaybackFragment extends Fragment {
         PopupMenu popup = new PopupMenu(requireContext(), anchor);
         popup.getMenu().add(Menu.NONE, 1, 0, R.string.play);
         popup.getMenu().add(Menu.NONE, 2, 1, R.string.download);
+        // Sharing only makes sense on a fixed https build: the link domain is the
+        // baked API_HOST, and only an https host is caught back (a verified App
+        // Link) — an http link would have no handler and just open the browser.
+        if (BuildConfig.API_HOST.startsWith("https://")) {
+            popup.getMenu().add(Menu.NONE, 3, 2, R.string.share);
+        }
         popup.setOnMenuItemClickListener(item -> {
             switch (item.getItemId()) {
                 case 1:
@@ -614,11 +623,29 @@ public class PlaybackFragment extends Fragment {
                 case 2:
                     downloadEvent(event, startMsec);
                     return true;
+                case 3:
+                    shareEvent(startMsec);
+                    return true;
                 default:
                     return false;
             }
         });
         popup.show();
+    }
+
+    /** Shares a link to the event (host + camera + moment) via any app. */
+    private void shareEvent(long startMsec) {
+        String host = SecureStore.getInstance(requireContext()).getConfigHost();
+        if (host == null) {
+            return;
+        }
+
+        String link = EventShareLink.build(host, currentCamera.getId(), startMsec);
+
+        Intent send = new Intent(Intent.ACTION_SEND);
+        send.setType("text/plain");
+        send.putExtra(Intent.EXTRA_TEXT, getString(R.string.share_event_message, link));
+        startActivity(Intent.createChooser(send, getString(R.string.share)));
     }
 
     /** Downloads the clip spanning the event (start_ts .. end_ts). */

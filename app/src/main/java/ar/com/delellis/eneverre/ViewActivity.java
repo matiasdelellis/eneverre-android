@@ -45,6 +45,11 @@ public class ViewActivity extends AppCompatActivity
     private static final String TAG_LIVE = "live";
     private static final String TAG_PLAYBACK = "playback";
 
+    /** Open straight on the Playback tab (e.g. from a shared event link). */
+    public static final String EXTRA_START_ON_PLAYBACK = "START_ON_PLAYBACK";
+    /** Epoch millis to seek the playback to when {@link #EXTRA_START_ON_PLAYBACK}. */
+    public static final String EXTRA_INITIAL_TIME_MS = "INITIAL_TIME_MS";
+
     private Location location;
     private Camera currentCamera;
     private int currentPosition = 0;
@@ -75,10 +80,20 @@ public class ViewActivity extends AppCompatActivity
             liveContainer = LiveContainerFragment.newInstance(location, currentPosition);
         }
 
-        // Always land on Live: restoring straight into Playback would need the
-        // current camera, which only arrives asynchronously from the pager.
-        showLive();
-        bottomNav.setSelectedItemId(R.id.nav_live);
+        // A fresh deep link (shared event) opens directly on Playback at the
+        // event's moment. On a restore we ignore it and land on Live: restoring
+        // straight into Playback would need the current camera, which only
+        // arrives asynchronously from the pager.
+        boolean startOnPlayback = intent.getBooleanExtra(EXTRA_START_ON_PLAYBACK, false);
+        if (savedInstanceState == null && startOnPlayback) {
+            long initialTimeMs = intent.getLongExtra(EXTRA_INITIAL_TIME_MS, 0L);
+            playbackContainer = PlaybackContainerFragment.newInstance(location, currentPosition, initialTimeMs);
+            showPlayback();
+            bottomNav.setSelectedItemId(R.id.nav_playback);
+        } else {
+            showLive();
+            bottomNav.setSelectedItemId(R.id.nav_live);
+        }
 
         bottomNav.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
