@@ -21,17 +21,20 @@ import ar.com.delellis.eneverre.model.Locations;
  * the camera — so "share" really means "share with users who already have
  * access to the same cameras".
  *
- * <p>The link uses the backend host itself ({@code SecureStore.getConfigHost()})
- * as the domain, so no extra domain has to be registered. Format:
- * <pre>{@code <host>/share/event?c=<cameraId>&t=<startEpochMs>}</pre>
- * Only the start moment is carried: seeking there lands on the right event, so
- * the duration is redundant.
+ * <p>The link is shared with the web frontend: the same URL opens this app when
+ * installed, or the frontend in a browser otherwise. It uses the backend host
+ * itself ({@code SecureStore.getConfigHost()}) as the domain (no extra domain),
+ * with the frontend's query-based format at the root:
+ * <pre>{@code <host>/?view=playback&cam=<cameraId>&t=<startUnixSeconds>}</pre>
+ * Only the start moment is carried (in seconds): seeking there lands on the
+ * right event, so the duration is redundant.
  */
 public class EventShareLink {
 
-    private static final String PATH = "/share/event";
-    private static final String PARAM_CAMERA = "c";
+    private static final String PARAM_VIEW = "view";
+    private static final String PARAM_CAMERA = "cam";
     private static final String PARAM_TIME = "t";
+    private static final String VIEW_PLAYBACK = "playback";
 
     /** Parsed contents of a share link. */
     public static class Parsed {
@@ -46,28 +49,35 @@ public class EventShareLink {
 
     /** Builds a shareable link pointing at the event's start moment. */
     public static String build(String host, String cameraId, long startMs) {
-        // getConfigHost() already carries the scheme (the user types it at login).
+        // getConfigHost() carries the scheme (and maybe an /api path); drop the
+        // path so the link sits at the domain root, where the frontend reads it.
         String base = host.endsWith("/") ? host.substring(0, host.length() - 1) : host;
         return Uri.parse(base).buildUpon()
-                .path(PATH)
+                .path("/")
+                .appendQueryParameter(PARAM_VIEW, VIEW_PLAYBACK)
                 .appendQueryParameter(PARAM_CAMERA, cameraId)
-                .appendQueryParameter(PARAM_TIME, Long.toString(startMs))
+                .appendQueryParameter(PARAM_TIME, Long.toString(startMs / 1000L))
                 .build()
                 .toString();
     }
 
-    /** Returns the parsed link, or {@code null} if {@code uri} is not one of ours. */
+    /**
+     * Returns the parsed link, or {@code null} if {@code uri} is not a playback
+     * share link. The app handles every link to the host (the frontend lives at
+     * the root), so non-playback links parse to {@code null} and fall through.
+     */
     public static Parsed parse(Uri uri) {
-        if (uri == null || uri.getPath() == null || !uri.getPath().startsWith(PATH)) {
+        if (uri == null || !uri.isHierarchical()) {
             return null;
         }
         try {
+            String view = uri.getQueryParameter(PARAM_VIEW);
             String cameraId = uri.getQueryParameter(PARAM_CAMERA);
             String time = uri.getQueryParameter(PARAM_TIME);
-            if (cameraId == null || time == null) {
+            if (!VIEW_PLAYBACK.equals(view) || cameraId == null || time == null) {
                 return null;
             }
-            return new Parsed(cameraId, Long.parseLong(time));
+            return new Parsed(cameraId, Long.parseLong(time) * 1000L);
         } catch (NumberFormatException e) {
             return null;
         }

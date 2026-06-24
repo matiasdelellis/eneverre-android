@@ -38,15 +38,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Shared event links (e.g. sent over WhatsApp). The distinctive
-                 path avoids hijacking other links; the recipient's credentials
-                 gate the actual access. Sharing is only offered on fixed-API_HOST
-                 builds, so appLinkHost is the baked host; on user-typed-host
-                 builds it is "*" and inert (no link is ever produced).
+            <!-- Shared event links (e.g. sent over WhatsApp), shared with the web
+                 frontend: the same URL opens the app when installed or the
+                 frontend in a browser otherwise. The link sits at the domain
+                 root with query params, and intent-filters cannot match on the
+                 query, so the app claims the whole host: non-playback links just
+                 parse to null and fall through (see EventShareLink). The
+                 recipient's credentials still gate the actual access.
 
-                 https only: with a fixed https API_HOST, appLinkAutoVerify is
-                 "true", so this is a *verified* App Link that opens without the
-                 browser (needs assetlinks.json on that host). -->
+                 Sharing is only offered on fixed-API_HOST builds, so appLinkHost
+                 is the baked host; on user-typed-host builds it is "*" and inert
+                 (no link is ever produced). https only: with a fixed https
+                 API_HOST, appLinkAutoVerify is "true", so this is a *verified*
+                 App Link that opens without the browser (needs assetlinks.json
+                 on that host). -->
             <intent-filter android:autoVerify="${appLinkAutoVerify}">
                 <action android:name="android.intent.action.VIEW" />
 
@@ -55,7 +60,6 @@
 
                 <data android:scheme="https" />
                 <data android:host="${appLinkHost}" />
-                <data android:pathPrefix="/share/event" />
             </intent-filter>
         </activity>
         <provider
