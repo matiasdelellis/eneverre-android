@@ -30,7 +30,11 @@ import ar.com.delellis.eneverre.model.Location;
 import ar.com.delellis.eneverre.model.Locations;
 import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
+import ar.com.delellis.eneverre.util.SecureStore;
 import ar.com.delellis.eneverre.util.UserCodePickerDialog;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class CamerasActivity extends AppCompatActivity implements OnCameraClickListener {
 
@@ -110,7 +114,38 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
             });
             return true;
         }
+        else if (itemId == R.id.logout) {
+            confirmLogout();
+            return true;
+        }
         return super.onOptionsItemSelected(item);
+    }
+
+    private void confirmLogout() {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.logout_confirm_title)
+                .setMessage(R.string.logout_confirm_message)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.logout, (dialog, which) -> performLogout())
+                .show();
+    }
+
+    private void performLogout() {
+        // Best-effort server-side revocation of the current token; don't block
+        // the UI on it (if offline the token simply lapses at its 30-day TTL).
+        ApiClient.getApiService().logout().enqueue(new Callback<Void>() {
+            @Override
+            public void onResponse(Call<Void> call, Response<Void> response) { }
+            @Override
+            public void onFailure(Call<Void> call, Throwable t) { }
+        });
+
+        SecureStore.getInstance(this).clearCredentials();
+
+        Intent intent = new Intent(this, LoginActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
     }
 
     @Override

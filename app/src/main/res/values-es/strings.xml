@@ -37,6 +37,9 @@
     <string name="event_unknown">Evento</string>
     <string name="no_events">No hay eventos para esta cámara</string>
     <string name="error_get_events">No se pudieron obtener los eventos de la cámara</string>
+    <string name="logout">Cerrar sesión</string>
+    <string name="logout_confirm_title">¿Cerrar sesión?</string>
+    <string name="logout_confirm_message">Tendrás que ingresar tus credenciales nuevamente para volver a entrar.</string>
     <string name="about_eneverre">Acerca de Eneverre…</string>
     <string name="title_about">Acerca de Eneverre</string>
     <string name="about_description">Un cliente Android para eneverre-api, que consolida las transmisiones de cámaras de distintos fabricantes en una sola aplicación.</string>

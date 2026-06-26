@@ -40,6 +40,9 @@
     <string name="event_unknown">Event</string>
     <string name="no_events">There are no events for this camera</string>
     <string name="error_get_events">Failed to get camera events</string>
+    <string name="logout">Log out</string>
+    <string name="logout_confirm_title">Log out?</string>
+    <string name="logout_confirm_message">You will need to enter your credentials again to sign back in.</string>
     <string name="about_eneverre">About Eneverre…</string>
     <string name="title_about">About Eneverre</string>
     <string name="about_description">An Android client for the eneverre-api, which consolidates the camera streams from different manufacturers into a single application.</string>

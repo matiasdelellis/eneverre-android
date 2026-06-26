@@ -4,6 +4,10 @@ import java.util.List;
 
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.EventsResponse;
+import ar.com.delellis.eneverre.api.model.LoginRequest;
+import ar.com.delellis.eneverre.api.model.LoginResponse;
+import ar.com.delellis.eneverre.api.model.RefreshRequest;
+import ar.com.delellis.eneverre.api.model.RefreshResponse;
 import ar.com.delellis.eneverre.api.model.Recording;
 import ar.com.delellis.eneverre.api.model.UserCode;
 import ar.com.delellis.eneverre.api.model.VerifyStatus;
@@ -16,6 +20,18 @@ import retrofit2.http.Path;
 import retrofit2.http.Query;
 
 public interface ApiService {
+    /** Exchanges username/password for a token pair; no auth header required. */
+    @POST("auth/login")
+    Call<LoginResponse> login(@Body LoginRequest credentials);
+
+    /** Exchanges a refresh token for a fresh (rotated) token pair; no auth header required. */
+    @POST("auth/refresh")
+    Call<RefreshResponse> refresh(@Body RefreshRequest refreshToken);
+
+    /** Revokes the current Bearer token (server-side session) on logout. */
+    @POST("auth/logout")
+    Call<Void> logout();
+
     @GET("cameras")
     Call<List<Camera>> cameras();
 

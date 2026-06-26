@@ -27,6 +27,8 @@ public class SplashActivity extends AppCompatActivity {
     /** A device user code to authorize from a link, or null for a normal start. */
     private String pendingUserCode = null;
 
+    private SecureStore secureStore = null;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -37,7 +39,7 @@ public class SplashActivity extends AppCompatActivity {
         pendingUserCode = data != null && data.isHierarchical()
                 ? data.getQueryParameter(PARAM_USER_CODE) : null;
 
-        SecureStore secureStore = SecureStore.getInstance(this);
+        secureStore = SecureStore.getInstance(this);
         if (!secureStore.hasCredentials()) {
             goToLoginActivicy();
             return;
@@ -46,8 +48,9 @@ public class SplashActivity extends AppCompatActivity {
         try {
             ApiClient.getInstance(
                     secureStore.getConfigHost(),
-                    secureStore.getConfigUsername(),
-                    secureStore.getConfigPassword()
+                    secureStore.getAccessToken(),
+                    secureStore.getRefreshToken(),
+                    secureStore.getAccessExpiresAt()
             );
         } catch (IllegalArgumentException e) {
             // Stored host is unusable: re-authenticate.
@@ -55,6 +58,12 @@ public class SplashActivity extends AppCompatActivity {
             return;
         }
 
+        // Renew the access token up front if it is about to expire, then validate
+        // the session by listing cameras (the authenticator still covers a 401).
+        ApiClient.getInstance().refreshSessionIfExpiringSoon(this::validateSession);
+    }
+
+    private void validateSession() {
         ApiClient.getApiService().cameras().enqueue(new ApiCallback<List<Camera>>(this) {
             @Override
             public void onSuccess(List<Camera> cameras) {
