@@ -21,6 +21,7 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.ScaleGestureDetector.SimpleOnScaleGestureListener;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.WindowManager;
 import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
@@ -189,6 +190,8 @@ public class TimelineView extends View {
     private GestureDetector _gestureDetector;
     private ScaleGestureDetector _scaleDetector;
     private OnTimelineListener _listener = null;
+    /** System minimum fling velocity (px/s); a fling must clearly exceed it. */
+    private int _minFlingVelocity = 0;
 
     public TimelineView(Context context) {
         super(context);
@@ -618,12 +621,22 @@ public class TimelineView extends View {
 
         @Override
         public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+            // Only coast on a deliberate horizontal flick. The system minimum
+            // fling velocity is low enough that an ordinary scrub-and-lift
+            // registers as a fling, carrying the timeline to a time the user
+            // didn't intend. Below the threshold (or a mostly-vertical release),
+            // let ACTION_UP select exactly where the finger lifted.
+            if (Math.abs(velocityX) < _minFlingVelocity * FLING_MIN_VELOCITY_FACTOR
+                    || Math.abs(velocityX) <= Math.abs(velocityY)) {
+                return false;
+            }
             _isFlinging = true;
             runFlingAnimation(velocityX);
             return true;
         }
 
         private boolean _waitForNextActionUp = false;
+        private static final int FLING_MIN_VELOCITY_FACTOR = 6;
 
         boolean isAnimating() {
             return scrollAnimator != null && scrollAnimator.isRunning();
@@ -756,6 +769,7 @@ public class TimelineView extends View {
 
         _gestureDetector = new GestureDetector(context, _gestureListener);
         _scaleDetector = new ScaleGestureDetector(context, _scaleListener);
+        _minFlingVelocity = ViewConfiguration.get(context).getScaledMinimumFlingVelocity();
     }
 
     private final Rect r = new Rect();
