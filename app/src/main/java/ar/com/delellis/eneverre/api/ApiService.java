@@ -39,7 +39,7 @@ public interface ApiService {
     Call<Void> home(@Path("device_id") String device_id);
 
     @POST("camera/{device_id}/ptz/move")
-    Call<Void> move(@Path("device_id") String device_id, @Query("x") int x, @Query("y") int y);
+    Call<Void> move(@Path("device_id") String device_id, @Query("x") float x, @Query("y") float y);
 
     @POST("camera/{device_id}/ptz/recalibrate")
     Call<Void> recalibrate(@Path("device_id") String device_id);

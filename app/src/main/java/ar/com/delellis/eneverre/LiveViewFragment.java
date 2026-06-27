@@ -194,19 +194,19 @@ public class LiveViewFragment extends Fragment {
         });
 
         view.findViewById(R.id.ptz_left_button).setOnClickListener(v -> {
-            apiService.move(currentCamera.getId(), -45, 0).enqueue(commandCallback());
+            apiService.move(currentCamera.getId(), -45f, 0f).enqueue(commandCallback());
         });
 
         view.findViewById(R.id.ptz_right_button).setOnClickListener(v -> {
-            apiService.move(currentCamera.getId(), 45, 0).enqueue(commandCallback());
+            apiService.move(currentCamera.getId(), 45f, 0f).enqueue(commandCallback());
         });
 
         view.findViewById(R.id.ptz_up_button).setOnClickListener(v -> {
-            apiService.move(currentCamera.getId(), 0, -45).enqueue(commandCallback());
+            apiService.move(currentCamera.getId(), 0f, -45f).enqueue(commandCallback());
         });
 
         view.findViewById(R.id.ptz_down_button).setOnClickListener(v -> {
-            apiService.move(currentCamera.getId(), 0, 45).enqueue(commandCallback());
+            apiService.move(currentCamera.getId(), 0f, 45f).enqueue(commandCallback());
         });
 
         setPipModeLayout(false);
