@@ -139,52 +139,57 @@ jobs:
           URL="${HOST}/api/admin/app/updates/phone"
 
           APK_DIR=app/build/outputs/apk/release
+          ARM64_APK=$(ls "$APK_DIR"/*arm64*.apk 2>/dev/null | head -1 || true)
+          ARMV7_APK=$(ls "$APK_DIR"/*armeabi*.apk 2>/dev/null | head -1 || true)
 
-          CURL_ARGS=(
-            --max-time 1800
-            -sS
-            -w "\n__HTTP__%{http_code}\n"
-            -H "Authorization: Bearer ${UPDATE_TOKEN}"
-            -F "versionName=${VERSION_NAME}"
-            -F "versionCode=${VERSION_CODE}"
-            -X POST "${URL}"
-          )
+          if [[ -z "$ARM64_APK" || -z "$ARMV7_APK" ]]; then
+            echo "::error::Missing per-ABI splits in $APK_DIR (arm64: '${ARM64_APK:-<missing>}', armeabi-v7a: '${ARMV7_APK:-<missing>}')"
+            exit 1
+          fi
 
-          UPLOADED=0
-          for apk in "$APK_DIR"/*arm64*.apk; do
-            [[ -f "$apk" ]] || continue
-            CURL_ARGS+=( -F "apk_arm64-v8a=@${apk}" )
-            echo "  + apk_arm64-v8a:    $apk"
-            UPLOADED=$((UPLOADED + 1))
-          done
-          for apk in "$APK_DIR"/*armeabi*.apk; do
-            [[ -f "$apk" ]] || continue
-            CURL_ARGS+=( -F "apk_armeabi-v7a=@${apk}" )
-            echo "  + apk_armeabi-v7a:  $apk"
-            UPLOADED=$((UPLOADED + 1))
-          done
-          for apk in "$APK_DIR"/*universal*.apk; do
-            [[ -f "$apk" ]] || continue
-            CURL_ARGS+=( -F "apk_universal=@${apk}" )
-            echo "  + apk_universal:    $apk"
-            UPLOADED=$((UPLOADED + 1))
-          done
-
-          if [[ $UPLOADED -eq 0 ]]; then
-            echo "::error::No APKs found in $APK_DIR"
+          echo "Publishing 2 APK(s) to $URL  (versionName=$VERSION_NAME, versionCode=$VERSION_CODE)"
+          echo
+          # Multi-POST publish: the first POST stages arm64 with
+          # finalize=false so the server keeps the in-progress release in
+          # pending.json; the second POST appends armeabi-v7a and
+          # commits atomically with finalize=true. This way a retry of
+          # this workflow (or a re-run after a transient failure)
+          # replaces the staged APK instead of "rotating" an
+          # already-committed partial release.
+          echo "[1/2] POST $URL  (apk_arm64-v8a=$(basename "$ARM64_APK"), finalize=false)"
+          RESPONSE=$(curl --max-time 1800 -sS -w "\n__HTTP__%{http_code}" \
+            -H "Authorization: Bearer ${UPDATE_TOKEN}" \
+            -F "apk_arm64-v8a=@${ARM64_APK}" \
+            -F "versionName=${VERSION_NAME}" \
+            -F "versionCode=${VERSION_CODE}" \
+            -F "finalize=false" \
+            -X POST "${URL}")
+          HTTP_CODE=$(echo "$RESPONSE" | sed -n 's/.*__HTTP__\([0-9]\+\).*/\1/p')
+          BODY=$(echo "$RESPONSE" | sed 's/__HTTP__[0-9]\+//')
+          echo "Response (HTTP $HTTP_CODE):"
+          echo "$BODY"
+          if [[ "$HTTP_CODE" != "200" ]]; then
+            echo "::error::Publish failed for arm64-v8a with HTTP $HTTP_CODE"
             exit 1
           fi
 
           echo
-          echo "POST $URL  (versionName=$VERSION_NAME, versionCode=$VERSION_CODE, $UPLOADED APK(s))"
-          RESPONSE=$(curl "${CURL_ARGS[@]}")
+          echo "[2/2] POST $URL  (apk_armeabi-v7a=$(basename "$ARMV7_APK"), finalize=true)"
+          RESPONSE=$(curl --max-time 1800 -sS -w "\n__HTTP__%{http_code}" \
+            -H "Authorization: Bearer ${UPDATE_TOKEN}" \
+            -F "apk_armeabi-v7a=@${ARMV7_APK}" \
+            -F "versionName=${VERSION_NAME}" \
+            -F "versionCode=${VERSION_CODE}" \
+            -F "finalize=true" \
+            -X POST "${URL}")
           HTTP_CODE=$(echo "$RESPONSE" | sed -n 's/.*__HTTP__\([0-9]\+\).*/\1/p')
           BODY=$(echo "$RESPONSE" | sed 's/__HTTP__[0-9]\+//')
-
           echo "Response (HTTP $HTTP_CODE):"
           echo "$BODY"
-
           if [[ "$HTTP_CODE" != "200" ]]; then
-            echo "::error::Publish failed with HTTP $HTTP_CODE"
+            echo "::error::Publish failed for armeabi-v7a with HTTP $HTTP_CODE"
             exit 1
           fi
+
+          echo
+          echo "All 2 APK(s) committed as version $VERSION_NAME ($VERSION_CODE)."
