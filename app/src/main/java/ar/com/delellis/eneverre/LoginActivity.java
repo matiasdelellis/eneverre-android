@@ -4,10 +4,14 @@ import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 
 import android.content.Intent;
+import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.text.method.HideReturnsTransformationMethod;
+import android.text.method.PasswordTransformationMethod;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
@@ -27,6 +31,7 @@ import ar.com.delellis.eneverre.api.model.LoginResponse;
 import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
 import ar.com.delellis.eneverre.util.SecureStore;
+import ar.com.delellis.eneverre.util.UpdateChecker;
 
 public class LoginActivity extends AppCompatActivity {
     private static final String TAG = "LoginActivity";
@@ -56,6 +61,21 @@ public class LoginActivity extends AppCompatActivity {
 
         usernameText = (EditText) findViewById(R.id.editUsername);
         passwordText = (EditText) findViewById(R.id.editPassword);
+        passwordText.setOnTouchListener((v, event) -> {
+            if (event.getAction() != MotionEvent.ACTION_UP) {
+                return false;
+            }
+            Drawable end = passwordText.getCompoundDrawablesRelative()[2];
+            if (end == null) {
+                return false;
+            }
+            int touchSlop = (int) (24 * v.getResources().getDisplayMetrics().density);
+            if (event.getRawX() < passwordText.getRight() - passwordText.getPaddingEnd() - touchSlop) {
+                return false;
+            }
+            togglePasswordVisibility();
+            return true;
+        });
 
         progressBar = (ProgressBar) findViewById(R.id.loginProgressBar);
         progressBar.setVisibility(GONE);
@@ -104,6 +124,12 @@ public class LoginActivity extends AppCompatActivity {
 
         ApiClient.getInstance(host, null, null, 0L);
 
+        // In parallel with the login API call, check for an auto-update
+        // from the eneverre-api server. Runs at most once per cold start,
+        // so the splash's check (if any) takes precedence and this is a
+        // no-op in that case.
+        UpdateChecker.checkForUpdate(this);
+
         LoginRequest request = new LoginRequest(username, password, deviceName());
         ApiClient.getApiService().login(request).enqueue(new ApiCallback<LoginResponse>(this) {
             @Override
@@ -150,6 +176,17 @@ public class LoginActivity extends AppCompatActivity {
         Toast.makeText(LoginActivity.this, message, Toast.LENGTH_LONG).show();
         progressBar.setVisibility(GONE);
         logingButton.setEnabled(true);
+    }
+
+    private void togglePasswordVisibility() {
+        boolean showing = passwordText.getTransformationMethod() instanceof PasswordTransformationMethod;
+        int endDrawable = showing ? R.drawable.ic_visibility_off_24 : R.drawable.ic_visibility_24;
+        passwordText.setTransformationMethod(showing
+                ? HideReturnsTransformationMethod.getInstance()
+                : PasswordTransformationMethod.getInstance());
+        passwordText.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                R.drawable.ic_lock_24, 0, endDrawable, 0);
+        passwordText.setSelection(passwordText.getText().length());
     }
 
     /**

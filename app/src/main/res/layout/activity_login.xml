@@ -34,7 +34,7 @@
         android:layout_below="@+id/title"
         android:layout_centerHorizontal="true"
         android:ems="12"
-        android:inputType="textNoSuggestions"
+        android:inputType="textUri"
         android:hint="@string/serverHint"
         android:drawableStart="@drawable/ic_cloud_24"
         android:drawablePadding="4dp"/>
@@ -49,6 +49,7 @@
         android:layout_marginTop="14dp"
         android:ems="12"
         android:inputType="text"
+        android:autofillHints="username"
         android:hint="@string/usernameHint"
         android:drawableStart="@drawable/ic_account_24"
         android:drawablePadding="4dp"/>
@@ -62,9 +63,12 @@
         android:layout_marginTop="14dp"
         android:ems="12"
         android:inputType="textPassword"
+        android:autofillHints="password"
         android:hint="@string/passwordHint"
         android:drawableStart="@drawable/ic_lock_24"
-        android:drawablePadding="4dp"/>
+        android:drawableEnd="@drawable/ic_visibility_24"
+        android:drawablePadding="4dp"
+        android:paddingEnd="8dp"/>
 
     <Button
         android:id="@+id/buttonLogin"

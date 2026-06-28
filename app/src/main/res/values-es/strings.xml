@@ -71,4 +71,14 @@
     <string name="share_event_message">Mira este evento: %1$s</string>
     <string name="shared_event_unavailable">No tienes acceso a este evento</string>
     <string name="open">Abrir</string>
+    <string name="update_available_title">Actualización disponible</string>
+    <string name="update_available_message">La versión %1$s está disponible.</string>
+    <string name="update_available_message_with_notes">La versión %1$s está disponible.\n\n%2$s</string>
+    <string name="update_button_update">Actualizar</string>
+    <string name="update_button_later">Más tarde</string>
+    <string name="update_button_skip">Omitir esta versión</string>
+    <string name="update_downloading">Descargando actualización…</string>
+    <string name="update_integrity_failed">Falló la verificación de integridad</string>
+    <string name="update_download_failed">No se pudo descargar la actualización</string>
+    <string name="update_install_failed">No se pudo abrir el instalador</string>
 </resources>

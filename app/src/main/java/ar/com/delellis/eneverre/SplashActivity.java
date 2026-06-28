@@ -16,6 +16,7 @@ import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
 import ar.com.delellis.eneverre.util.EventShareLink;
 import ar.com.delellis.eneverre.util.SecureStore;
+import ar.com.delellis.eneverre.util.UpdateChecker;
 
 public class SplashActivity extends AppCompatActivity {
 
@@ -57,6 +58,11 @@ public class SplashActivity extends AppCompatActivity {
             goToLoginActivicy();
             return;
         }
+
+        // In parallel with the auth flow, check for an auto-update from the
+        // eneverre-api server. The check is anonymous (no Bearer header is
+        // stamped yet) and runs at most once per cold start.
+        UpdateChecker.checkForUpdate(this);
 
         // Renew the access token up front if it is about to expire, then validate
         // the session by listing cameras (the authenticator still covers a 401).

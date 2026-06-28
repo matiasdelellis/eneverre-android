@@ -9,6 +9,7 @@ import ar.com.delellis.eneverre.api.model.LoginResponse;
 import ar.com.delellis.eneverre.api.model.RefreshRequest;
 import ar.com.delellis.eneverre.api.model.RefreshResponse;
 import ar.com.delellis.eneverre.api.model.Recording;
+import ar.com.delellis.eneverre.api.model.UpdateManifest;
 import ar.com.delellis.eneverre.api.model.UserCode;
 import ar.com.delellis.eneverre.api.model.VerifyStatus;
 import okhttp3.ResponseBody;
@@ -18,6 +19,7 @@ import retrofit2.http.GET;
 import retrofit2.http.POST;
 import retrofit2.http.Path;
 import retrofit2.http.Query;
+import retrofit2.http.Url;
 
 public interface ApiService {
     /** Exchanges username/password for a token pair; no auth header required. */
@@ -58,4 +60,20 @@ public interface ApiService {
 
     @POST("auth/device/verify")
     Call<VerifyStatus> device_verify(@Body UserCode userCode);
+
+    /**
+     * Auto-update manifest for the phone track. Anonymous on the server side
+     * (no auth header is sent because there are no tokens yet at this point
+     * of the flow); the existing Bearer interceptor simply has nothing to
+     * stamp.
+     */
+    @GET("app/phone/update")
+    Call<UpdateManifest> checkUpdate();
+
+    /**
+     * Downloads the APK at an absolute URL returned by the update manifest.
+     * Uses {@code @Url} so the call bypasses Retrofit's base-URL composition.
+     */
+    @GET
+    Call<ResponseBody> downloadUpdate(@Url String url);
 }

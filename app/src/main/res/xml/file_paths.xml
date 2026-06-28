@@ -3,4 +3,10 @@
     <external-path
         name="external_files"
         path="." />
+
+    <!-- Auto-update downloads land in getCacheDir()/updates/ and are
+         handed to the system installer via FileProvider. -->
+    <cache-path
+        name="updates"
+        path="updates/" />
 </paths>
