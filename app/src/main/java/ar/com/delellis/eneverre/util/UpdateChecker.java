@@ -79,6 +79,24 @@ public final class UpdateChecker {
     private UpdateChecker() {}
 
     /**
+     * Outcome of a forced update check, surfaced through
+     * {@link UpdateCallback#onResult(UpdateResult)} so the caller can show
+     * its own feedback. {@link #UPDATE_AVAILABLE} is also delivered — the
+     * dialog is shown either way, but the callback fires first so the
+     * caller can re-enable a "Check" button etc.
+     */
+    public enum UpdateResult {
+        UP_TO_DATE,
+        UPDATE_AVAILABLE,
+        FAILED
+    }
+
+    /** Result callback for {@link #checkForUpdate(Activity, boolean, UpdateCallback)}. */
+    public interface UpdateCallback {
+        void onResult(UpdateResult result);
+    }
+
+    /**
      * Fires the update check. Safe to call from any activity; subsequent
      * calls within the same process are a no-op. The dialog (if an update
      * is found) is shown in the supplied activity — if that activity has
@@ -86,7 +104,20 @@ public final class UpdateChecker {
      * silently bails.
      */
     public static synchronized void checkForUpdate(Activity activity) {
-        if (checked) {
+        checkForUpdate(activity, false, null);
+    }
+
+    /**
+     * Same as {@link #checkForUpdate(Activity)}, but lets the caller force a
+     * second check (the splash's auto-check counts as the first) and
+     * receive a callback with the outcome. The callback is invoked on the
+     * UI thread for every terminal outcome, including {@code UPDATE_AVAILABLE}
+     * (so the caller can re-enable a button even when the dialog covers
+     * most of the screen). Pass {@code null} to opt out of feedback.
+     */
+    public static synchronized void checkForUpdate(Activity activity, boolean force,
+                                                    UpdateCallback callback) {
+        if (checked && !force) {
             return;
         }
         checked = true;
@@ -98,6 +129,9 @@ public final class UpdateChecker {
             // performLogin): bail silently. The next caller (after login)
             // gets its own shot because checked is set, but that's fine —
             // the doc rule is one check per cold start.
+            if (callback != null) {
+                activity.runOnUiThread(() -> callback.onResult(UpdateResult.FAILED));
+            }
             return;
         }
 
@@ -108,26 +142,41 @@ public final class UpdateChecker {
                 // 204 No Content and 503 (feature disabled) are the documented
                 // "no update" responses; we also drop any other non-2xx.
                 if (response.code() == 204 || response.code() == 503) {
+                    if (callback != null) {
+                        activity.runOnUiThread(() -> callback.onResult(UpdateResult.UP_TO_DATE));
+                    }
                     return;
                 }
                 if (!response.isSuccessful() || response.body() == null) {
                     Log.w(TAG, "Update check returned HTTP " + response.code());
+                    if (callback != null) {
+                        activity.runOnUiThread(() -> callback.onResult(UpdateResult.FAILED));
+                    }
                     return;
                 }
 
                 UpdateManifest manifest = response.body();
                 if (manifest.getVersionCode() <= BuildConfig.VERSION_CODE) {
+                    if (callback != null) {
+                        activity.runOnUiThread(() -> callback.onResult(UpdateResult.UP_TO_DATE));
+                    }
                     return; // not newer than what's installed
                 }
 
                 UpdatePreferences prefs = UpdatePreferences.getInstance(activity);
                 if (prefs.isSkipped(manifest.getVersionName())) {
+                    if (callback != null) {
+                        activity.runOnUiThread(() -> callback.onResult(UpdateResult.UP_TO_DATE));
+                    }
                     return; // user previously chose to skip this version
                 }
 
                 UpdateBuild build = selectBuild(manifest.getBuilds());
                 if (build == null) {
                     Log.w(TAG, "Manifest has no builds to pick from");
+                    if (callback != null) {
+                        activity.runOnUiThread(() -> callback.onResult(UpdateResult.FAILED));
+                    }
                     return;
                 }
 
@@ -135,6 +184,9 @@ public final class UpdateChecker {
                     return; // nothing left to host the dialog
                 }
                 showDialog(activity, manifest, build, prefs);
+                if (callback != null) {
+                    activity.runOnUiThread(() -> callback.onResult(UpdateResult.UPDATE_AVAILABLE));
+                }
             }
 
             @Override
@@ -142,6 +194,9 @@ public final class UpdateChecker {
                 // Transient error: drop silently (the user is up-to-date by
                 // omission and will retry on the next cold start).
                 Log.w(TAG, "Update check failed", t);
+                if (callback != null) {
+                    activity.runOnUiThread(() -> callback.onResult(UpdateResult.FAILED));
+                }
             }
         });
     }

@@ -31,7 +31,6 @@ import ar.com.delellis.eneverre.api.model.LoginResponse;
 import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
 import ar.com.delellis.eneverre.util.SecureStore;
-import ar.com.delellis.eneverre.util.UpdateChecker;
 
 public class LoginActivity extends AppCompatActivity {
     private static final String TAG = "LoginActivity";
@@ -123,12 +122,6 @@ public class LoginActivity extends AppCompatActivity {
         logingButton.setEnabled(false);
 
         ApiClient.getInstance(host, null, null, 0L);
-
-        // In parallel with the login API call, check for an auto-update
-        // from the eneverre-api server. Runs at most once per cold start,
-        // so the splash's check (if any) takes precedence and this is a
-        // no-op in that case.
-        UpdateChecker.checkForUpdate(this);
 
         LoginRequest request = new LoginRequest(username, password, deviceName());
         ApiClient.getApiService().login(request).enqueue(new ApiCallback<LoginResponse>(this) {

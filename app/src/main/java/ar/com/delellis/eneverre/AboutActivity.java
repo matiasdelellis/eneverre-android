@@ -9,8 +9,13 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.snackbar.Snackbar;
+
+import ar.com.delellis.eneverre.util.UpdateChecker;
 
 public class AboutActivity extends AppCompatActivity {
+
+    private MaterialButton checkUpdatesButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -27,6 +32,19 @@ public class AboutActivity extends AppCompatActivity {
         sourceButton.setOnClickListener(v -> {
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.source_code_url)));
             startActivity(intent);
+        });
+
+        checkUpdatesButton = findViewById(R.id.about_check_updates_button);
+        checkUpdatesButton.setOnClickListener(v -> {
+            checkUpdatesButton.setEnabled(false);
+            UpdateChecker.checkForUpdate(this, true, result -> {
+                checkUpdatesButton.setEnabled(true);
+                if (result == UpdateChecker.UpdateResult.UP_TO_DATE) {
+                    Snackbar.make(checkUpdatesButton, R.string.no_update_available, Snackbar.LENGTH_SHORT).show();
+                } else if (result == UpdateChecker.UpdateResult.FAILED) {
+                    Snackbar.make(checkUpdatesButton, R.string.check_for_updates_failed, Snackbar.LENGTH_LONG).show();
+                }
+            });
         });
     }
 }

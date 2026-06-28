@@ -73,6 +73,15 @@
                 android:text="@string/view_source_code"
                 app:icon="@drawable/ic_cloud_24" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/about_check_updates_button"
+                style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/check_for_updates"
+                app:icon="@drawable/ic_refresh_24" />
+
         </LinearLayout>
 
     </androidx.core.widget.NestedScrollView>

@@ -31,6 +31,7 @@ import ar.com.delellis.eneverre.model.Locations;
 import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
 import ar.com.delellis.eneverre.util.SecureStore;
+import ar.com.delellis.eneverre.util.UpdateChecker;
 import ar.com.delellis.eneverre.util.UserCodePickerDialog;
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -83,6 +84,12 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
         if (pendingUserCode != null && !pendingUserCode.isEmpty()) {
             confirmDeviceLink(pendingUserCode.toUpperCase());
         }
+
+        // Fire the auto-update check from the first long-lived activity on
+        // the post-login flow: SplashActivity and LoginActivity both finish
+        // before the response can come back, so the dialog would be dropped
+        // if fired from there. Runs at most once per cold start.
+        UpdateChecker.checkForUpdate(this);
     }
 
     private void confirmDeviceLink(String userCode) {

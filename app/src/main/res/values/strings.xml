@@ -48,6 +48,9 @@
     <string name="about_description">An Android client for the eneverre-api, which consolidates the camera streams from different manufacturers into a single application.</string>
     <string name="about_version">Version %1$s (%2$d)</string>
     <string name="view_source_code">View source code</string>
+    <string name="check_for_updates">Check for updates</string>
+    <string name="no_update_available">You are up to date</string>
+    <string name="check_for_updates_failed">Could not check for updates</string>
     <string name="source_code_url" translatable="false">https://github.com/matiasdelellis/eneverre-android</string>
     <string name="privacy_enabled">Privacy mode enabled</string>
     <string name="privacy_disabled">Privacy mode disabled</string>
