@@ -1,4 +1,4 @@
-name: Build Signed APK
+name: Build Signed APK & GitHub Release
 
 permissions:
   contents: write
@@ -12,7 +12,7 @@ on:
         type: string
   push:
     tags:
-      - 'v*'
+      - '[0-9]*'
 
 jobs:
   build:
@@ -63,11 +63,10 @@ jobs:
       - name: Build Release APK
         # The GitHub release is the GENERIC APK: no API_HOST baked in, so
         # whoever downloads it can point the app at their own server at the
-        # login screen. The Publish Update workflow (a separate workflow,
-        # chained via workflow_run or run manually) re-builds the same code
-        # with -PAPI_HOST when both API_HOST and UPDATE_PUBLISH_TOKEN
-        # secrets are configured, and pushes that build to the operator's
-        # eneverre-api server as an auto-update.
+        # login screen. The "Publish Update" workflow (run manually) re-
+        # builds the same code with -PAPI_HOST when both API_HOST and
+        # UPDATE_PUBLISH_TOKEN secrets are configured, and pushes that build
+        # to the operator's eneverre-api server as an auto-update.
         run: |
           ./gradlew assembleRelease \
             -PSTORE_FILE=keystore.jks \

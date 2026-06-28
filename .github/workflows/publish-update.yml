@@ -3,15 +3,13 @@ name: Publish Update
 permissions:
   contents: read
 
-# Re-builds the same source as Build Signed APK with the operator's API_HOST
-# baked in, and POSTs the per-ABI APKs to the eneverre-api auto-update
-# endpoint (track=phone). The version is read from the freshly built APK.
+# Re-builds the source with the operator's API_HOST baked in, and POSTs the
+# per-ABI APKs to the eneverre-api auto-update endpoint (track=phone). The
+# version is read from the freshly built APK.
 #
-# Triggered two ways:
-#   1. workflow_run: automatically after a successful "Build Signed APK" run.
-#   2. workflow_dispatch: manually, with a version_name input that is
-#      validated against the built APK. Use this to re-publish a previous
-#      release after fixing the API side, or to publish without re-tagging.
+# Manual only. Never auto-runs. Use it to publish a build that the operator
+# just produced with "Build Signed APK & GitHub Release" (or any other build
+# of the current source) to the eneverre-api server.
 #
 # Requires API_HOST and UPDATE_PUBLISH_TOKEN secrets. The first step fails
 # fast with a clear error if either is missing.
@@ -22,19 +20,11 @@ on:
         description: 'Expected versionName (must match the value in app/build.gradle). The built APK is validated against this before publishing.'
         required: true
         type: string
-  workflow_run:
-    workflows: ["Build Signed APK"]
-    types: [completed]
 
 jobs:
   publish:
     name: Publish to API server
     runs-on: ubuntu-latest
-    # Run on manual dispatch unconditionally; on workflow_run only when the
-    # upstream build concluded successfully.
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
 
     steps:
       - name: Validate required secrets
@@ -122,11 +112,9 @@ jobs:
           echo "Detected version: $VERSION_NAME ($VERSION_CODE)"
 
       - name: Validate built version
-        # workflow_dispatch: the input is the version the operator bumped in
-        # app/build.gradle. Sanity-check that the APK actually carries that
-        # version. For workflow_run triggers the upstream build already
-        # validated (or the user pushed a tag they trust), so skip.
-        if: github.event_name == 'workflow_dispatch'
+        # The input is the version the operator bumped in app/build.gradle.
+        # Sanity-check that the APK actually carries that version, so a
+        # forgotten bump fails the publish loudly.
         env:
           EXPECTED: ${{ inputs.version_name }}
         run: |
