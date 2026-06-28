@@ -5,12 +5,18 @@ permissions:
 
 on:
   workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Expected versionName (must match the value in app/build.gradle). The build is validated against this and used as the git tag.'
+        required: true
+        type: string
   push:
     tags:
       - 'v*'
 
 jobs:
   build:
+    name: Build & GitHub Release
     runs-on: ubuntu-latest
 
     steps:
@@ -23,13 +29,15 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Generate Release Info
+      - name: Determine release tag
         id: release_info
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
           else
-            TAG="build-$(date +'%Y%m%d-%H%M%S')"
+            # workflow_dispatch: the input is the version the operator just
+            # bumped in app/build.gradle, and it is also the git tag.
+            TAG="${{ inputs.version_name }}"
           fi
 
           echo "tag=$TAG" >> $GITHUB_OUTPUT
@@ -42,6 +50,8 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
 
       - name: Grant execute permission
         run: chmod +x gradlew
@@ -51,16 +61,56 @@ jobs:
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
 
       - name: Build Release APK
+        # The GitHub release is the GENERIC APK: no API_HOST baked in, so
+        # whoever downloads it can point the app at their own server at the
+        # login screen. The Publish Update workflow (a separate workflow,
+        # chained via workflow_run or run manually) re-builds the same code
+        # with -PAPI_HOST when both API_HOST and UPDATE_PUBLISH_TOKEN
+        # secrets are configured, and pushes that build to the operator's
+        # eneverre-api server as an auto-update.
         run: |
           ./gradlew assembleRelease \
-            -PAPI_HOST=${API_HOST} \
             -PSTORE_FILE=keystore.jks \
             -PSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} \
             -PKEY_ALIAS=${{ secrets.KEY_ALIAS }} \
             -PKEY_PASSWORD=${{ secrets.KEY_PASSWORD }} \
             --configuration-cache
 
+      - name: Validate built version
+        # workflow_dispatch: the input is the version the operator bumped in
+        # app/build.gradle. Sanity-check that the APK actually carries that
+        # version, so a forgotten bump fails the release loudly. For tag
+        # pushes the pushed tag is the source of truth, so this is skipped.
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED: ${{ inputs.version_name }}
+        run: |
+          set -euo pipefail
+          APK=$(ls app/build/outputs/apk/release/*universal*.apk | head -1)
+          if [[ -z "$APK" ]]; then
+            echo "::error::No universal APK found in app/build/outputs/apk/release/"
+            exit 1
+          fi
+          AAPT2=$(ls -d "${ANDROID_HOME}"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -1 || true)
+          if [[ -z "$AAPT2" ]]; then
+            echo "::error::aapt2 not found in ANDROID_HOME/build-tools"
+            exit 1
+          fi
+          BUILT=$("$AAPT2" dump badging "$APK" | sed -nE "s/^package: name='[^']+' versionCode='[0-9]+' versionName='([^']+)'.*/\1/p" | head -1)
+          if [[ -z "$BUILT" ]]; then
+            echo "::error::Could not extract versionName from $APK"
+            exit 1
+          fi
+          if [[ "$BUILT" != "$EXPECTED" ]]; then
+            echo "::error::APK versionName is '$BUILT' but the workflow input was '$EXPECTED'. Did you forget to bump versionName in app/build.gradle?"
+            exit 1
+          fi
+          echo "Version OK: $BUILT"
+
       - name: Create GitHub Release
+        # softprops/action-gh-release@v2 creates the tag in git if it does
+        # not exist (workflow_dispatch path) or uses the existing one (tag
+        # push). This is the step that tags git on dispatch.
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_info.outputs.tag }}

@@ -1,0 +1,202 @@
+name: Publish Update
+
+permissions:
+  contents: read
+
+# Re-builds the same source as Build Signed APK with the operator's API_HOST
+# baked in, and POSTs the per-ABI APKs to the eneverre-api auto-update
+# endpoint (track=phone). The version is read from the freshly built APK.
+#
+# Triggered two ways:
+#   1. workflow_run: automatically after a successful "Build Signed APK" run.
+#   2. workflow_dispatch: manually, with a version_name input that is
+#      validated against the built APK. Use this to re-publish a previous
+#      release after fixing the API side, or to publish without re-tagging.
+#
+# Requires API_HOST and UPDATE_PUBLISH_TOKEN secrets. The first step fails
+# fast with a clear error if either is missing.
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Expected versionName (must match the value in app/build.gradle). The built APK is validated against this before publishing.'
+        required: true
+        type: string
+  workflow_run:
+    workflows: ["Build Signed APK"]
+    types: [completed]
+
+jobs:
+  publish:
+    name: Publish to API server
+    runs-on: ubuntu-latest
+    # Run on manual dispatch unconditionally; on workflow_run only when the
+    # upstream build concluded successfully.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Validate required secrets
+        env:
+          API_HOST: ${{ secrets.API_HOST }}
+          UPDATE_TOKEN: ${{ secrets.UPDATE_PUBLISH_TOKEN }}
+        run: |
+          fail=0
+          if [[ -z "${API_HOST}" ]]; then
+            echo "::error::Secret API_HOST is not set. Configure it in the repo settings to enable auto-update publishing."
+            fail=1
+          fi
+          if [[ -z "${UPDATE_TOKEN}" ]]; then
+            echo "::error::Secret UPDATE_PUBLISH_TOKEN is not set. Configure it in the repo settings to enable auto-update publishing."
+            fail=1
+          fi
+          exit $fail
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Grant execute permission
+        run: chmod +x gradlew
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
+
+      - name: Build Release APK (with API_HOST)
+        env:
+          API_HOST: ${{ secrets.API_HOST }}
+        run: |
+          ./gradlew assembleRelease \
+            -PAPI_HOST="${API_HOST}" \
+            -PSTORE_FILE=keystore.jks \
+            -PSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} \
+            -PKEY_ALIAS=${{ secrets.KEY_ALIAS }} \
+            -PKEY_PASSWORD=${{ secrets.KEY_PASSWORD }} \
+            --configuration-cache
+
+      - name: Extract version info from APK
+        id: version
+        run: |
+          set -euo pipefail
+          # versionCode/versionName are build-wide, so any of the per-ABI
+          # APKs is fine. Use the universal one because it is always built
+          # when splits.universalApk is true.
+          APK=$(ls app/build/outputs/apk/release/*universal*.apk | head -1)
+          if [[ -z "$APK" ]]; then
+            echo "::error::No universal APK found in app/build/outputs/apk/release/"
+            exit 1
+          fi
+          AAPT2=$(ls -d "${ANDROID_HOME}"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -1 || true)
+          if [[ -z "$AAPT2" ]]; then
+            echo "::error::aapt2 not found in ANDROID_HOME/build-tools"
+            exit 1
+          fi
+          BADGING=$("$AAPT2" dump badging "$APK")
+          VERSION_NAME=$(echo "$BADGING" | sed -nE "s/^package: name='[^']+' versionCode='[0-9]+' versionName='([^']+)'.*/\1/p" | head -1)
+          VERSION_CODE=$(echo "$BADGING" | sed -nE "s/^package: name='[^']+' versionCode='([0-9]+)'.*/\1/p" | head -1)
+          if [[ -z "$VERSION_NAME" || -z "$VERSION_CODE" ]]; then
+            echo "::error::Could not extract versionName/versionCode from $APK"
+            echo "Badging output:"
+            echo "$BADGING" | head -10
+            exit 1
+          fi
+          echo "versionName=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "versionCode=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VERSION_NAME ($VERSION_CODE)"
+
+      - name: Validate built version
+        # workflow_dispatch: the input is the version the operator bumped in
+        # app/build.gradle. Sanity-check that the APK actually carries that
+        # version. For workflow_run triggers the upstream build already
+        # validated (or the user pushed a tag they trust), so skip.
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED: ${{ inputs.version_name }}
+        run: |
+          if [[ "${EXPECTED}" != "${{ steps.version.outputs.versionName }}" ]]; then
+            echo "::error::APK versionName is '${{ steps.version.outputs.versionName }}' but the workflow input was '${EXPECTED}'. Did you forget to bump versionName in app/build.gradle?"
+            exit 1
+          fi
+          echo "Version OK: ${{ steps.version.outputs.versionName }}"
+
+      - name: Publish to API server
+        env:
+          API_HOST: ${{ secrets.API_HOST }}
+          UPDATE_TOKEN: ${{ secrets.UPDATE_PUBLISH_TOKEN }}
+          VERSION_NAME: ${{ steps.version.outputs.versionName }}
+          VERSION_CODE: ${{ steps.version.outputs.versionCode }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          # Strip any trailing slash from the host before appending the path.
+          HOST="${API_HOST%/}"
+          URL="${HOST}/api/admin/app/updates/phone"
+
+          APK_DIR=app/build/outputs/apk/release
+
+          CURL_ARGS=(
+            --max-time 1800
+            -sS
+            -w "\n__HTTP__%{http_code}\n"
+            -H "Authorization: Bearer ${UPDATE_TOKEN}"
+            -F "versionName=${VERSION_NAME}"
+            -F "versionCode=${VERSION_CODE}"
+            -X POST "${URL}"
+          )
+
+          UPLOADED=0
+          for apk in "$APK_DIR"/*arm64*.apk; do
+            [[ -f "$apk" ]] || continue
+            CURL_ARGS+=( -F "apk_arm64-v8a=@${apk}" )
+            echo "  + apk_arm64-v8a:    $apk"
+            UPLOADED=$((UPLOADED + 1))
+          done
+          for apk in "$APK_DIR"/*armeabi*.apk; do
+            [[ -f "$apk" ]] || continue
+            CURL_ARGS+=( -F "apk_armeabi-v7a=@${apk}" )
+            echo "  + apk_armeabi-v7a:  $apk"
+            UPLOADED=$((UPLOADED + 1))
+          done
+          for apk in "$APK_DIR"/*universal*.apk; do
+            [[ -f "$apk" ]] || continue
+            CURL_ARGS+=( -F "apk_universal=@${apk}" )
+            echo "  + apk_universal:    $apk"
+            UPLOADED=$((UPLOADED + 1))
+          done
+
+          if [[ $UPLOADED -eq 0 ]]; then
+            echo "::error::No APKs found in $APK_DIR"
+            exit 1
+          fi
+
+          echo
+          echo "POST $URL  (versionName=$VERSION_NAME, versionCode=$VERSION_CODE, $UPLOADED APK(s))"
+          RESPONSE=$(curl "${CURL_ARGS[@]}")
+          HTTP_CODE=$(echo "$RESPONSE" | sed -n 's/.*__HTTP__\([0-9]\+\).*/\1/p')
+          BODY=$(echo "$RESPONSE" | sed 's/__HTTP__[0-9]\+//')
+
+          echo "Response (HTTP $HTTP_CODE):"
+          echo "$BODY"
+
+          if [[ "$HTTP_CODE" != "200" ]]; then
+            echo "::error::Publish failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
