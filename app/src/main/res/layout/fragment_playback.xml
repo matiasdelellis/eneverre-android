@@ -26,6 +26,7 @@
         android:src="@drawable/ic_camera_24" />
 
     <LinearLayout
+        android:id="@+id/playback_content"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical">
@@ -153,6 +154,33 @@
                 </LinearLayout>
             </FrameLayout>
         </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Shown instead of the player when the camera has no playback capability. -->
+    <LinearLayout
+        android:id="@+id/playback_unsupported"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginBottom="12dp"
+            android:alpha="0.5"
+            android:contentDescription="@string/no_recordings"
+            android:src="@drawable/ic_video_cam_24"
+            app:tint="?android:attr/textColorSecondary" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/no_recordings"
+            android:textColor="?android:attr/textColorSecondary" />
 
     </LinearLayout>
 

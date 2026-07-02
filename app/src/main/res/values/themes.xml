@@ -10,4 +10,10 @@
     </style>
 
     <style name="Theme.Eneverre" parent="Base.Theme.Eneverre" />
+
+    <!-- Forces a fully circular FAB (Material 3 FABs are rounded squares by default). -->
+    <style name="ShapeAppearanceOverlay.Eneverre.Fab.Circle" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
 </resources>

@@ -121,4 +121,17 @@ public class ApiClient {
     public String getPlaybackStreamUrl(String device_id, String start, double duration) {
         return getApiBase() + "camera/" + device_id + "/playback/get?start=" + start + "&duration=" + duration;
     }
+
+    /**
+     * Builds the WebSocket URL for the two-way-audio (push-to-talk) endpoint of the
+     * given camera: {@code ws(s)://<host>[:port]/api/camera/<id>/talk}. Carries no
+     * credentials — the caller authenticates with the same Bearer header exposed by
+     * {@link #getAuthorizationHeader()} (Android sets it on the upgrade request).
+     */
+    public String getTalkUrl(String device_id) {
+        // http→ws, https→wss; keep the port when the host declares one.
+        String wsProtocol = this.protocol.startsWith("https") ? "wss://" : "ws://";
+        String host = this.port > 0 ? this.baseUrl + ":" + this.port : this.baseUrl;
+        return wsProtocol + host + "/api/camera/" + device_id + "/talk";
+    }
 }

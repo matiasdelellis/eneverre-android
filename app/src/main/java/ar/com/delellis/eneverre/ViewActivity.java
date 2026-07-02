@@ -177,6 +177,17 @@ public class ViewActivity extends AppCompatActivity
         currentCamera = camera;
         currentPosition = position;
         updateTitle();
+        updatePlaybackTabEnabled();
+    }
+
+    /**
+     * Enables the Playback tab only when the current camera supports it, so it
+     * can't be opened from Live for cameras with no recordings. (Swiping into an
+     * unsupported camera while already on the tab still shows the empty state.)
+     */
+    private void updatePlaybackTabEnabled() {
+        boolean supported = currentCamera != null && currentCamera.hasPlayback();
+        bottomNav.getMenu().findItem(R.id.nav_playback).setEnabled(supported);
     }
 
     /** Called by the visible {@link LiveViewFragment} from its menu. */

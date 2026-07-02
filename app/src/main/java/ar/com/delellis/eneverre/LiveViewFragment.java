@@ -6,7 +6,9 @@ import static android.widget.Toast.LENGTH_LONG;
 import static android.widget.Toast.LENGTH_SHORT;
 
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -14,6 +16,8 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
@@ -25,6 +29,7 @@ import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
@@ -34,6 +39,7 @@ import android.widget.Toast;
 
 import com.google.android.material.color.MaterialColors;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.slider.Slider;
 
 import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.util.VLCVideoLayout;
@@ -43,6 +49,7 @@ import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.player.VlcPlayer;
+import ar.com.delellis.eneverre.talk.TalkClient;
 import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
 import ar.com.delellis.eneverre.util.AppPreferences;
@@ -70,6 +77,15 @@ public class LiveViewFragment extends Fragment {
     private long startRecord = -1;
     private Bitmap startBitmap;
 
+    /** Push-to-talk (two-way audio) session; non-null while talk mode is active. */
+    private TalkClient talkClient = null;
+    /** Whether the talk panel (swapped in for the PTZ controls) is showing. */
+    private boolean talkMode = false;
+    /** Current talk toast, kept so a newer one can cancel it instead of queueing behind it. */
+    private Toast talkToast = null;
+    /** Launched on the first talk press if the mic permission is missing. */
+    private ActivityResultLauncher<String> requestMicPermission;
+
     AppPreferences prefs = null;
 
     /** Live controls in the host toolbar; only the resumed (visible) page contributes. */
@@ -82,7 +98,8 @@ public class LiveViewFragment extends Fragment {
         @Override
         public void onPrepareMenu(@NonNull Menu menu) {
             boolean privacy = currentCamera.getPrivacy();
-            menu.findItem(R.id.privacy_action).setVisible(!privacy);
+            // The privacy toggle is offered only on cameras that support it.
+            menu.findItem(R.id.privacy_action).setVisible(currentCamera.hasPrivacy() && !privacy);
             menu.findItem(R.id.pip_action).setVisible(!privacy);
             menu.findItem(R.id.volume_action).setVisible(!privacy);
             menu.findItem(R.id.recalibrate_ptz).setVisible(currentCamera.getPtz() && !privacy);
@@ -129,6 +146,17 @@ public class LiveViewFragment extends Fragment {
         if (getArguments() != null) {
             currentCamera = (Camera) getArguments().getSerializable(ARG_CURRENT_CAMERA);
         }
+
+        // Registered here (before STARTED) as required by the Activity Result API.
+        // The mic button requests the permission on first use, then opens talk mode.
+        requestMicPermission = registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(), granted -> {
+                    if (granted) {
+                        enterTalkMode();
+                    } else {
+                        Toast.makeText(requireContext(), R.string.talk_permission_required, LENGTH_LONG).show();
+                    }
+                });
     }
 
     @Override
@@ -189,6 +217,49 @@ public class LiveViewFragment extends Fragment {
             takeSnapshot();
         });
 
+        // Two-way audio: the mic FAB (shown only for backchannel-capable cameras,
+        // hidden in privacy mode) opens talk mode, which swaps the PTZ controls for
+        // the talk panel below. It is hidden while the panel is open — the panel's
+        // own close button ends the session.
+        view.findViewById(R.id.talk_button).setOnClickListener(v -> toggleTalkMode());
+        view.findViewById(R.id.talk_close_button).setOnClickListener(v -> exitTalkMode());
+
+        // Mic gain: 50 = unity, 100 = 2× (see TalkClient.setMicGain).
+        ((Slider) view.findViewById(R.id.mic_volume)).addOnChangeListener((slider, value, fromUser) -> {
+            if (talkClient != null) {
+                talkClient.setMicGain(value / 50f);
+            }
+        });
+
+        // Camera volume drives the live VLC player directly (0–100).
+        ((Slider) view.findViewById(R.id.camera_volume)).addOnChangeListener((slider, value, fromUser) -> {
+            if (vlcPlayer != null) {
+                vlcPlayer.setVolume((int) value);
+            }
+        });
+
+        // Push-to-talk: enabled once the backchannel is ready; hold to transmit.
+        FloatingActionButton pushToTalk = view.findViewById(R.id.push_to_talk_button);
+        pushToTalk.setOnTouchListener((v, event) -> {
+            if (talkClient == null) {
+                return false;
+            }
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    talkClient.setTransmitting(true);
+                    setPushToTalkTransmitting((FloatingActionButton) v, true);
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    v.performClick();
+                    talkClient.setTransmitting(false);
+                    setPushToTalkTransmitting((FloatingActionButton) v, false);
+                    return true;
+                default:
+                    return false;
+            }
+        });
+
         view.findViewById(R.id.ptz_home_button).setOnClickListener(v -> {
             apiService.home(currentCamera.getId()).enqueue(commandCallback());
         });
@@ -228,6 +299,9 @@ public class LiveViewFragment extends Fragment {
     public void onPause() {
         super.onPause();
 
+        // Never keep the mic hot in the background, even in Picture-in-Picture.
+        exitTalkMode();
+
         if (!requireActivity().isInPictureInPictureMode()) {
             stopLive();
         }
@@ -239,6 +313,7 @@ public class LiveViewFragment extends Fragment {
         // so it keeps streaming in the mini-window. When that window is then
         // dismissed the activity is torn down without another onPause, so this
         // is the only place that guarantees the native player is released.
+        exitTalkMode();
         stopLive();
         super.onDestroyView();
     }
@@ -275,11 +350,8 @@ public class LiveViewFragment extends Fragment {
 
     private void setOrientationLayout(int orientation) {
         FrameLayout frameLayout = fragmentView.findViewById(R.id.frameLayout);
-        View ptzButtons = fragmentView.findViewById(R.id.ptz_buttons);
 
         if (orientation == Configuration.ORIENTATION_PORTRAIT) {
-            ptzButtons.setVisibility(VISIBLE);
-
             int screenWidth = Resources.getSystem().getDisplayMetrics().widthPixels;
             int videoWidth = currentCamera.getWidth();
             int videoHeight = currentCamera.getHeight();
@@ -288,16 +360,22 @@ public class LiveViewFragment extends Fragment {
             frameLayout.getLayoutParams().height = screenWidth * videoHeight / videoWidth;
         }
         else {
-            ptzButtons.setVisibility(GONE);
             frameLayout.setLayoutParams(
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0.0F)
             );
         }
+        // Show the PTZ controls or the talk panel (both portrait-only) as appropriate.
+        updateControlRegionVisibility();
     }
 
     private void setVideoPrivacyLayout(boolean privacy) {
         fragmentView.findViewById(R.id.take_snapshot).setEnabled(!privacy);
         fragmentView.findViewById(R.id.record_button).setEnabled(!privacy);
+
+        // Two-way audio makes no sense while privacy is on: leave talk mode and hide it.
+        if (privacy) {
+            exitTalkMode();
+        }
 
         fragmentView.findViewById(R.id.exit_privacy_button).setVisibility(privacy ? VISIBLE : GONE);
 
@@ -312,6 +390,7 @@ public class LiveViewFragment extends Fragment {
 
         currentCamera.setPrivacy(privacy);
         privacyListener.onPrivacyChanged(currentCamera, privacy);
+        updateTalkButtonVisibility();
 
         // Privacy hides the pip/volume/recalibrate actions — refresh the menu.
         requireActivity().invalidateOptionsMenu();
@@ -387,19 +466,155 @@ public class LiveViewFragment extends Fragment {
         }
     }
 
+    /** Mic-button click: open talk mode, or close it if already active. */
+    private void toggleTalkMode() {
+        if (talkMode) {
+            exitTalkMode();
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            // Granting triggers the launcher callback, which then calls enterTalkMode().
+            requestMicPermission.launch(Manifest.permission.RECORD_AUDIO);
+            return;
+        }
+        enterTalkMode();
+    }
+
+    /**
+     * Opens the backchannel and swaps the PTZ controls for the talk panel. The
+     * push-to-talk button stays disabled until the session reports it is ready.
+     */
+    private void enterTalkMode() {
+        if (talkMode) {
+            return;
+        }
+        String talkUrl = ApiClient.getInstance().getTalkUrl(currentCamera.getId());
+        String authHeader = ApiClient.getInstance().getAuthorizationHeader();
+        if (authHeader == null) {
+            showTalkToast(R.string.talk_error, LENGTH_SHORT);
+            return;
+        }
+
+        talkMode = true;
+        updateTalkButtonVisibility();
+        updateControlRegionVisibility();
+
+        // The push-to-talk button stays disabled until the backchannel is ready.
+        // Align the live player with the current camera-volume slider up front.
+        fragmentView.findViewById(R.id.push_to_talk_button).setEnabled(false);
+        if (vlcPlayer != null) {
+            vlcPlayer.setVolume((int) ((Slider) fragmentView.findViewById(R.id.camera_volume)).getValue());
+        }
+
+        showTalkToast(R.string.talk_connecting, LENGTH_SHORT);
+
+        talkClient = new TalkClient(talkUrl, authHeader, new TalkClient.Listener() {
+            @Override
+            public void onReady() {
+                if (!isAdded()) return;
+                requireActivity().runOnUiThread(() -> {
+                    if (!talkMode) return;
+                    talkClient.setMicGain(((Slider) fragmentView.findViewById(R.id.mic_volume)).getValue() / 50f);
+                    fragmentView.findViewById(R.id.push_to_talk_button).setEnabled(true);
+                    showTalkToast(R.string.talk_ready, LENGTH_SHORT);
+                });
+            }
+
+            @Override
+            public void onEnd(@Nullable String reason) {
+                if (!isAdded()) return;
+                requireActivity().runOnUiThread(() -> {
+                    // Surface only real failures (HTTP status), not a normal release/close.
+                    if (reason != null && reason.startsWith("HTTP")) {
+                        int msg = reason.contains("409") ? R.string.talk_busy : R.string.talk_error;
+                        showTalkToast(msg, LENGTH_LONG);
+                    }
+                    exitTalkMode();
+                });
+            }
+        });
+        talkClient.start();
+    }
+
+    /** Closes the session and restores the PTZ controls. Idempotent. */
+    private void exitTalkMode() {
+        if (talkClient != null) {
+            TalkClient client = talkClient;
+            talkClient = null;
+            client.stop();
+        }
+        talkMode = false;
+        if (fragmentView != null) {
+            updateTalkButtonVisibility();
+            updateControlRegionVisibility();
+        }
+    }
+
+    /**
+     * Shows a talk-status toast, cancelling the previous one first. Otherwise the
+     * "ready" toast would queue behind the still-visible "connecting" one and only
+     * appear seconds later, even though the camera already accepts audio.
+     */
+    private void showTalkToast(int resId, int duration) {
+        if (talkToast != null) {
+            talkToast.cancel();
+        }
+        talkToast = Toast.makeText(requireContext(), resId, duration);
+        talkToast.show();
+    }
+
+    /**
+     * The mic FAB opens talk mode, so it is shown only when that is possible: a
+     * backchannel-capable camera, not in privacy, not in PiP, and not already in
+     * talk mode (the panel's own close button ends the session).
+     */
+    private void updateTalkButtonVisibility() {
+        boolean pip = requireActivity().isInPictureInPictureMode();
+        boolean show = currentCamera.hasTalk() && !currentCamera.getPrivacy() && !talkMode && !pip;
+        fragmentView.findViewById(R.id.talk_button).setVisibility(show ? VISIBLE : GONE);
+    }
+
+    /** Recolors the push-to-talk FAB red while held, so the user sees the mic is live. */
+    private void setPushToTalkTransmitting(FloatingActionButton fab, boolean transmitting) {
+        int background = transmitting
+                ? ContextCompat.getColor(fab.getContext(), R.color.record_red)
+                : MaterialColors.getColor(fab, com.google.android.material.R.attr.colorPrimaryContainer);
+        int icon = transmitting
+                ? android.graphics.Color.WHITE
+                : MaterialColors.getColor(fab, com.google.android.material.R.attr.colorOnPrimaryContainer);
+        fab.setBackgroundTintList(ColorStateList.valueOf(background));
+        fab.setImageTintList(ColorStateList.valueOf(icon));
+    }
+
+    /**
+     * Reconciles which control region is shown below the video: the talk panel in
+     * talk mode, the PTZ controls otherwise. Both are portrait-only (as PTZ always
+     * was) and hidden in Picture-in-Picture.
+     */
+    private void updateControlRegionVisibility() {
+        boolean portrait = getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT;
+        boolean pip = requireActivity().isInPictureInPictureMode();
+        boolean showRegion = portrait && !pip;
+        fragmentView.findViewById(R.id.ptz_buttons).setVisibility(showRegion && !talkMode ? VISIBLE : GONE);
+        fragmentView.findViewById(R.id.talk_controls).setVisibility(showRegion && talkMode ? VISIBLE : GONE);
+    }
+
     private void setPipModeLayout(boolean enabled) {
         if (enabled) {
+            exitTalkMode();
             fragmentView.findViewById(R.id.frameLayout).setLayoutParams(
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0.0F)
             );
-            fragmentView.findViewById(R.id.ptz_buttons).setVisibility(GONE);
             fragmentView.findViewById(R.id.record_button).setVisibility(GONE);
             fragmentView.findViewById(R.id.take_snapshot).setVisibility(GONE);
         } else {
-            fragmentView.findViewById(R.id.ptz_buttons).setVisibility(VISIBLE);
             fragmentView.findViewById(R.id.record_button).setVisibility(VISIBLE);
             fragmentView.findViewById(R.id.take_snapshot).setVisibility(VISIBLE);
         }
+        // Mic FAB and the PTZ/talk region follow PiP + orientation.
+        updateTalkButtonVisibility();
+        updateControlRegionVisibility();
     }
 
     private boolean isRecording() {

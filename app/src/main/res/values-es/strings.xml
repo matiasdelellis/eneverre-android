@@ -32,6 +32,7 @@
     <string name="error_unexpected">Error inesperado</string>
     <string name="retry">Reintentar</string>
     <string name="there_is_no_recording">No hay grabación</string>
+    <string name="no_recordings">Sin grabaciones</string>
     <string name="events">Eventos</string>
     <string name="event_motion">Movimiento</string>
     <string name="event_unknown">Evento</string>
@@ -84,4 +85,14 @@
     <string name="update_integrity_failed">Falló la verificación de integridad</string>
     <string name="update_download_failed">No se pudo descargar la actualización</string>
     <string name="update_install_failed">No se pudo abrir el instalador</string>
+    <string name="talk">Mantené para hablar</string>
+    <string name="talk_connecting">Conectando…</string>
+    <string name="talk_ready">Hablando — adelante</string>
+    <string name="talk_permission_required">Se necesita permiso de micrófono para hablar</string>
+    <string name="talk_busy">Alguien más está hablando con esta cámara</string>
+    <string name="talk_error">No se pudo iniciar el audio bidireccional</string>
+    <string name="talk_mic_volume">Volumen del micrófono</string>
+    <string name="talk_camera_volume">Volumen de la cámara</string>
+    <string name="talk_title">Audio bidireccional</string>
+    <string name="talk_close">Cerrar</string>
 </resources>

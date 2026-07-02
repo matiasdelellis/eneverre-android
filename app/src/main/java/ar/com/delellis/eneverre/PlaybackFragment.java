@@ -135,6 +135,13 @@ public class PlaybackFragment extends Fragment {
 
         prefs = AppPreferences.getInstance(requireContext());
 
+        // Cameras without playback capability show a "no recordings" empty state
+        // instead of the player; nothing else in this fragment is wired up.
+        if (!currentCamera.hasPlayback()) {
+            showPlaybackUnsupported();
+            return;
+        }
+
         setOrientationLayout(getResources().getConfiguration().orientation);
 
         timelineView = view.findViewById(R.id.timeline_view);
@@ -327,6 +334,9 @@ public class PlaybackFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        if (controller == null) {
+            return; // camera has no playback (see showPlaybackUnsupported)
+        }
         viewResumed = true;
 
         controller.attach(playerView);
@@ -356,6 +366,9 @@ public class PlaybackFragment extends Fragment {
     @Override
     public void onPause() {
         super.onPause();
+        if (controller == null) {
+            return; // camera has no playback (see showPlaybackUnsupported)
+        }
         viewResumed = false;
 
         // Hand the current moment to the sibling cameras before leaving.
@@ -454,7 +467,18 @@ public class PlaybackFragment extends Fragment {
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        if (controller == null) {
+            return; // camera has no playback (see showPlaybackUnsupported)
+        }
         setOrientationLayout(newConfig.orientation);
+    }
+
+    /** Hides the player UI and shows the "no recordings" empty state. */
+    private void showPlaybackUnsupported() {
+        root.findViewById(R.id.playback_content).setVisibility(GONE);
+        root.findViewById(R.id.record_button).setVisibility(GONE);
+        root.findViewById(R.id.take_snapshot).setVisibility(GONE);
+        root.findViewById(R.id.playback_unsupported).setVisibility(VISIBLE);
     }
 
     private void setOrientationLayout(int orientation) {

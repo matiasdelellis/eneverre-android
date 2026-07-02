@@ -9,6 +9,17 @@
     tools:context=".LiveViewFragment">
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/talk_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|bottom"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="160dp"
+        android:contentDescription="@string/talk"
+        android:src="@drawable/ic_mic_24"
+        android:visibility="gone" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/record_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -124,6 +135,114 @@
                 android:src="@drawable/ic_chevron_right_24" />
 
         </RelativeLayout>
+
+        <LinearLayout
+            android:id="@+id/talk_controls"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone">
+
+            <!-- Header: title + close, right below the video. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/talk_title"
+                    android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+                <ImageButton
+                    android:id="@+id/talk_close_button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/talk_close"
+                    android:src="@drawable/ic_close_24" />
+
+            </LinearLayout>
+
+            <!-- Controls, centered in the space left below the header. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="16dp"
+                        android:contentDescription="@string/talk_mic_volume"
+                        android:src="@drawable/ic_mic_24" />
+
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/mic_volume"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:contentDescription="@string/talk_mic_volume"
+                        android:value="50"
+                        android:valueFrom="0"
+                        android:valueTo="100" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="24dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="16dp"
+                        android:contentDescription="@string/talk_camera_volume"
+                        android:src="@drawable/ic_volume_24" />
+
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/camera_volume"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:contentDescription="@string/talk_camera_volume"
+                        android:value="100"
+                        android:valueFrom="0"
+                        android:valueTo="100" />
+
+                </LinearLayout>
+
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/push_to_talk_button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:contentDescription="@string/talk"
+                    android:enabled="false"
+                    android:src="@drawable/ic_mic_24"
+                    app:fabCustomSize="96dp"
+                    app:maxImageSize="40dp"
+                    app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.Eneverre.Fab.Circle" />
+
+            </LinearLayout>
+
+        </LinearLayout>
 
     </LinearLayout>
 

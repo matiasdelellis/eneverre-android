@@ -35,6 +35,7 @@
     <string name="error_unexpected">Unexpected error</string>
     <string name="retry">Retry</string>
     <string name="there_is_no_recording">There is no recording</string>
+    <string name="no_recordings">No recordings</string>
     <string name="events">Events</string>
     <string name="event_motion">Motion</string>
     <string name="event_unknown">Event</string>
@@ -88,4 +89,14 @@
     <string name="update_integrity_failed">Update integrity check failed</string>
     <string name="update_download_failed">Failed to download update</string>
     <string name="update_install_failed">Failed to open the installer</string>
+    <string name="talk">Hold to talk</string>
+    <string name="talk_connecting">Connecting…</string>
+    <string name="talk_ready">Talking — go ahead</string>
+    <string name="talk_permission_required">Microphone permission is required to talk</string>
+    <string name="talk_busy">Someone else is talking to this camera</string>
+    <string name="talk_error">Could not start two-way audio</string>
+    <string name="talk_mic_volume">Microphone volume</string>
+    <string name="talk_camera_volume">Camera volume</string>
+    <string name="talk_title">Two-way audio</string>
+    <string name="talk_close">Close</string>
 </resources>
