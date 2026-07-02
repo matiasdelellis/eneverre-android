@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Debug builds get a red icon background so they're easy to tell apart from
+         the release app when both are installed (see applicationIdSuffix). -->
+    <color name="ic_launcher_background">#C62828</color>
+</resources>

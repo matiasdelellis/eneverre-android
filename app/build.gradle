@@ -79,6 +79,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Distinct package id so a debug build installs alongside the release
+            // one. The FileProvider authority (${applicationId}.fileprovider) and
+            // deep-link handling stay unique per variant automatically.
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
         release {
             // Only require signing when actually assembling a release build, so
             // debug builds (e.g. ./gradlew assembleDebug) don't need secrets.
