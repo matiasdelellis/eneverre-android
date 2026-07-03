@@ -509,7 +509,9 @@ public class LiveViewFragment extends Fragment {
 
         showTalkToast(R.string.talk_connecting, LENGTH_SHORT);
 
-        talkClient = new TalkClient(talkUrl, authHeader, new TalkClient.Listener() {
+        // Prefer AAC (16 kHz wideband) when the camera advertises it; else PCM/G.711.
+        boolean useAac = currentCamera.supportsTalkAac();
+        talkClient = new TalkClient(talkUrl, authHeader, useAac, new TalkClient.Listener() {
             @Override
             public void onReady() {
                 if (!isAdded()) return;

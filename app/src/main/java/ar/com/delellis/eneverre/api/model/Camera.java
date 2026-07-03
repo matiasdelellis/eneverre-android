@@ -4,6 +4,7 @@ import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
 
 import java.io.Serializable;
+import java.util.List;
 
 @SuppressWarnings("unused")
 public class Camera implements Serializable {
@@ -71,6 +72,14 @@ public class Camera implements Serializable {
         @SerializedName("talk")
         private boolean talk;
 
+        // Codecs the camera's backchannel actually accepts, probed from its SDP at
+        // startup (e.g. ["aac", "g711"]). Used to negotiate the talk codec instead
+        // of guessing. May be absent/empty if the probe hasn't finished or the
+        // camera was unreachable — fall back to G.711 then (every one supports it).
+        @Expose
+        @SerializedName("talk_codecs")
+        private List<String> talkCodecs;
+
         public boolean hasPrivacy() {
             return privacy;
         }
@@ -89,6 +98,10 @@ public class Camera implements Serializable {
 
         public boolean hasTalk() {
             return talk;
+        }
+
+        public List<String> getTalkCodecs() {
+            return talkCodecs;
         }
     }
 
@@ -141,6 +154,17 @@ public class Camera implements Serializable {
     /** Whether the camera supports the two-way-audio (push-to-talk) backchannel. */
     public boolean hasTalk() {
         return capabilities != null && capabilities.hasTalk();
+    }
+
+    /**
+     * Whether the camera's backchannel accepts AAC (wideband 16 kHz). When true,
+     * the talk client should negotiate {@code codec=aac}; otherwise it falls back
+     * to PCM/G.711, which every backchannel camera supports.
+     */
+    public boolean supportsTalkAac() {
+        return capabilities != null
+                && capabilities.getTalkCodecs() != null
+                && capabilities.getTalkCodecs().contains("aac");
     }
 
     public void setPrivacy(boolean enable) {

@@ -100,6 +100,18 @@ android {
         }
     }
 
+    // Name the built APKs after the app, version and ABI so the published /
+    // released files are self-describing — e.g. Eneverre-0.8.0-arm64-v8a.apk
+    // (debug builds carry the -debug versionName suffix). The ABI substrings are
+    // kept intact so publish-update.yml's *arm64*/*armeabi*/*universal* globs
+    // still match.
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def abi = output.getFilter(com.android.build.OutputFile.ABI) ?: "universal"
+            output.outputFileName = "Eneverre-${variant.versionName}-${abi}.apk"
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
