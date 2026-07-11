@@ -119,7 +119,7 @@ public class ApiClient {
      * the URL is safe to build and log.
      */
     public String getPlaybackStreamUrl(String device_id, String start, double duration) {
-        return getApiBase() + "camera/" + device_id + "/playback/get?start=" + start + "&duration=" + duration;
+        return getApiBase() + "camera/" + device_id + "/recordings/get?start=" + start + "&duration=" + duration;
     }
 
     /**

@@ -9,6 +9,7 @@ import ar.com.delellis.eneverre.api.model.LoginResponse;
 import ar.com.delellis.eneverre.api.model.RefreshRequest;
 import ar.com.delellis.eneverre.api.model.RefreshResponse;
 import ar.com.delellis.eneverre.api.model.Recording;
+import ar.com.delellis.eneverre.api.model.RecordingsTimeline;
 import ar.com.delellis.eneverre.api.model.UpdateManifest;
 import ar.com.delellis.eneverre.api.model.UserCode;
 import ar.com.delellis.eneverre.api.model.VerifyStatus;
@@ -49,13 +50,21 @@ public interface ApiService {
     @POST("camera/{device_id}/privacy")
     Call<Void> privacy(@Path("device_id") String device_id, @Query("enable") boolean enable);
 
-    @GET("camera/{device_id}/playback/list")
+    @GET("camera/{device_id}/recordings/list")
     Call<List<Recording>> recordings(@Path("device_id") String device_id, @Query("start") String start, @Query("end") String end);
 
-    @GET("camera/{device_id}/playback/get")
+    @GET("camera/{device_id}/recordings/get")
     Call<ResponseBody> recording(@Path("device_id") String device_id, @Query("start") String start, @Query("duration") double duration);
 
-    @GET("cameras/{camera_id}/events")
+    /**
+     * Recorded extent (first start / last end / segment count) for a camera.
+     * Embedded media engine only — returns 404 on servers without it, so callers
+     * must degrade gracefully.
+     */
+    @GET("camera/{device_id}/recordings/timeline")
+    Call<RecordingsTimeline> recordingsTimeline(@Path("device_id") String device_id);
+
+    @GET("camera/{camera_id}/events")
     Call<EventsResponse> events(@Path("camera_id") String camera_id, @Query("since") String since, @Query("until") String until);
 
     @POST("auth/device/verify")

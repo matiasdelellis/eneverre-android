@@ -52,6 +52,7 @@ import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.Event;
 import ar.com.delellis.eneverre.api.model.EventsResponse;
 import ar.com.delellis.eneverre.api.model.Recording;
+import ar.com.delellis.eneverre.api.model.RecordingsTimeline;
 import ar.com.delellis.eneverre.player.GaplessPlaybackController;
 import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
@@ -101,6 +102,14 @@ public class PlaybackFragment extends Fragment {
     private long lastTimeSelected = 0L;
     private boolean timelineSelecting = false;
     private long lastOldRecording = -1L;
+
+    /**
+     * Recorded extent reported by {@code recordings/timeline}: oldest recorded
+     * moment and newest, in ms (-1 until loaded). {@link #recordingsStartMs}
+     * bounds the backward pagination so we stop requesting empty history.
+     */
+    private long recordingsStartMs = -1L;
+    private long recordingsEndMs = -1L;
 
     private long startRecord = -1;
 
@@ -278,9 +287,20 @@ public class PlaybackFragment extends Fragment {
             public void onRequestMoreBackgroundData() {
                 Log.d(TAG, "onRequestMoreBackgroundData");
 
+                // Stop paging once we've reached the oldest recorded moment, so
+                // we don't fire endless 24h requests into empty history.
+                if (recordingsStartMs > 0 && lastOldRecording > 0
+                        && lastOldRecording <= recordingsStartMs) {
+                    Log.d(TAG, "Reached oldest recording; no more background data");
+                    return;
+                }
+
                 Toast.makeText(requireContext(), R.string.looking_for_previous_recordings, LENGTH_SHORT).show();
 
                 long since = lastOldRecording - (24 * 60 * 60 * 1000L);
+                if (recordingsStartMs > 0 && since < recordingsStartMs) {
+                    since = recordingsStartMs;
+                }
                 getRecordings(since, lastOldRecording, -1);
                 getEvents(since, lastOldRecording);
             }
@@ -315,10 +335,7 @@ public class PlaybackFragment extends Fragment {
 
         requireActivity().addMenuProvider(playbackMenu, getViewLifecycleOwner(), Lifecycle.State.RESUMED);
 
-        long now = System.currentTimeMillis();
-        long yesterday = now - (24 * 60 * 60 * 1000L);
         long shared = sharedPlaybackTime();
-        long select = shared > 0 ? shared : now - (5 * 1000L);
 
         // When swiping in from another camera, position the timeline at the
         // shared moment right away (instead of "now") so cameras stay in sync
@@ -327,8 +344,56 @@ public class PlaybackFragment extends Fragment {
             timelineView.setCurrent(shared);
         }
 
-        getRecordings(yesterday, now, select);
-        getEvents(yesterday, now);
+        loadInitialRecordings(shared);
+    }
+
+    /**
+     * Anchors the initial view on the recorded extent. Asks
+     * {@code recordings/timeline} for the newest/oldest recorded moment, then
+     * loads the last 24h of recordings ending at the newest one and drops the
+     * cursor there — so we open on real footage instead of "now", which usually
+     * sits past the last recording.
+     *
+     * <p>timeline shares the same availability as recordings/list and
+     * recordings/get (all gated on the recording engine), so a failure here is a
+     * genuine load error, not a "degrade to a fixed window" case: if timeline is
+     * unavailable, list/get would fail too. A camera with no recordings yet is
+     * reported by timeline as a 200 with null start/end, handled here.
+     *
+     * @param shared the moment shared by a sibling camera (swipe-in), or &le; 0.
+     */
+    private void loadInitialRecordings(long shared) {
+        ApiClient.getApiService().recordingsTimeline(currentCamera.getId())
+                .enqueue(new ApiCallback<RecordingsTimeline>(requireContext()) {
+                    @Override
+                    public void onSuccess(RecordingsTimeline body) {
+                        long end = (body != null) ? Time.RFC3339toMS(body.getEnd()) : -1L;
+                        long start = (body != null) ? Time.RFC3339toMS(body.getStart()) : -1L;
+                        recordingsEndMs = end;
+                        recordingsStartMs = start;
+
+                        // No recordings yet: timeline reports null start/end.
+                        if (end <= 0) {
+                            Toast.makeText(requireContext(), R.string.there_is_no_recording, LENGTH_LONG).show();
+                            return;
+                        }
+
+                        long since = end - (24 * 60 * 60 * 1000L);
+                        // Don't query before the oldest recording exists.
+                        if (start > 0 && since < start) {
+                            since = start;
+                        }
+                        long select = shared > 0 ? shared : end;
+
+                        getRecordings(since, end, select);
+                        getEvents(since, end);
+                    }
+
+                    @Override
+                    public void onError(int httpCode, String message) {
+                        Toast.makeText(requireContext(), R.string.error_get_recordings, LENGTH_LONG).show();
+                    }
+                });
     }
 
     @Override
