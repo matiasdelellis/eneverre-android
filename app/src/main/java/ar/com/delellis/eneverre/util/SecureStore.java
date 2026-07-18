@@ -16,6 +16,7 @@ public class SecureStore {
     private static final String KEY_ACCESS_TOKEN = "eneverre_access_token";
     private static final String KEY_REFRESH_TOKEN = "eneverre_refresh_token";
     private static final String KEY_ACCESS_EXPIRES_AT = "eneverre_access_expires_at";
+    private static final String KEY_MUST_CHANGE_PASSWORD = "eneverre_must_change_password";
 
     private static SecureStore instance;
 
@@ -80,7 +81,21 @@ public class SecureStore {
                 .remove(KEY_ACCESS_TOKEN)
                 .remove(KEY_REFRESH_TOKEN)
                 .remove(KEY_ACCESS_EXPIRES_AT)
+                .remove(KEY_MUST_CHANGE_PASSWORD)
                 .apply();
+    }
+
+    /**
+     * Whether the logged-in account still owes a mandatory password change
+     * ({@code must_change_password} on login). Persisted so the gate survives an
+     * app restart — the returning session skips login, so the flag is the only
+     * record. Cleared by a successful self password change.
+     */
+    public boolean mustChangePassword() {
+        return prefs.getBoolean(KEY_MUST_CHANGE_PASSWORD, false);
+    }
+    public void setMustChangePassword(boolean must) {
+        prefs.edit().putBoolean(KEY_MUST_CHANGE_PASSWORD, must).apply();
     }
 
     public String getConfigHost() {

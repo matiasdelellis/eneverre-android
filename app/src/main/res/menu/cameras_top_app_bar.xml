@@ -8,6 +8,11 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/sessions"
+        android:title="@string/my_sessions"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/about"
         android:title="@string/about_eneverre"
         app:showAsAction="never" />

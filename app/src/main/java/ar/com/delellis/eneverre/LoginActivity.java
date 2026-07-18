@@ -136,6 +136,15 @@ public class LoginActivity extends AppCompatActivity {
                 ApiClient.getInstance().setTokens(
                         response.getToken(), response.getRefreshToken(), response.getExpiresAt());
 
+                if (response.isMustChangePassword()) {
+                    // The server mandates a password change before the app is usable.
+                    // Persist it so a later cold start (which skips login) still gates.
+                    secureStore.setMustChangePassword(true);
+                    startActivity(new Intent(LoginActivity.this, ChangePasswordActivity.class));
+                    finish();
+                    return;
+                }
+
                 loadCamerasAndContinue();
             }
 

@@ -44,6 +44,7 @@ import com.google.android.material.slider.Slider;
 import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.util.VLCVideoLayout;
 
+import java.util.List;
 
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.ApiService;
@@ -69,6 +70,13 @@ public class LiveViewFragment extends Fragment {
     private View fragmentView;
 
     private Camera currentCamera;
+
+    /**
+     * Guards the one-shot RTSP-credential refresh: the live URL embeds rotating
+     * credentials, so a connect failure may just mean they rolled over. We refetch
+     * the camera list and retry once before surfacing the reconnect button.
+     */
+    private boolean rtspRefreshAttempted = false;
 
     private ApiService apiService = null;
 
@@ -191,6 +199,8 @@ public class LiveViewFragment extends Fragment {
         view.findViewById(R.id.reconnect_button).setVisibility(GONE);
         view.findViewById(R.id.reconnect_button).setOnClickListener(v -> {
             view.findViewById(R.id.reconnect_button).setVisibility(GONE);
+            // A manual reconnect gets its own shot at a credential refresh.
+            rtspRefreshAttempted = false;
             startLive();
         });
 
@@ -434,12 +444,22 @@ public class LiveViewFragment extends Fragment {
             if (event.type == MediaPlayer.Event.Buffering) {
                 if (event.getBuffering() == 100f) {
                     fragmentView.findViewById(R.id.loading_progress).setVisibility(GONE);
+                    // A clean connect means the current URL works; allow a fresh
+                    // refresh attempt if it later drops.
+                    rtspRefreshAttempted = false;
                 } else {
                     fragmentView.findViewById(R.id.loading_progress).setVisibility(VISIBLE);
                 }
             } else if (event.type == MediaPlayer.Event.EncounteredError) {
                 fragmentView.findViewById(R.id.loading_progress).setVisibility(GONE);
-                fragmentView.findViewById(R.id.reconnect_button).setVisibility(VISIBLE);
+                if (!rtspRefreshAttempted) {
+                    // The RTSP credentials rotate; refetch the camera list once for a
+                    // fresh URL and retry before giving up.
+                    rtspRefreshAttempted = true;
+                    refreshRtspAndRetry();
+                } else {
+                    fragmentView.findViewById(R.id.reconnect_button).setVisibility(VISIBLE);
+                }
             }
         });
 
@@ -449,6 +469,42 @@ public class LiveViewFragment extends Fragment {
     private void startLive() {
         String videoUrl = currentCamera.getRtsp();
         vlcPlayer.playUri(Uri.parse(videoUrl));
+    }
+
+    /**
+     * Refetches the camera list to pick up a fresh RTSP URL (its embedded
+     * credentials rotate), updates {@link #currentCamera} and retries playback.
+     * Falls back to the reconnect button if the list can't be fetched or the
+     * camera is gone.
+     */
+    private void refreshRtspAndRetry() {
+        apiService.cameras().enqueue(new ApiCallback<List<Camera>>(requireContext()) {
+            @Override
+            public void onSuccess(List<Camera> cameras) {
+                if (!isAdded() || vlcPlayer == null) {
+                    return;
+                }
+                if (cameras != null) {
+                    for (Camera camera : cameras) {
+                        if (currentCamera.getId().equals(camera.getId())) {
+                            // Preserve the current privacy state the user may have toggled.
+                            camera.setPrivacy(currentCamera.getPrivacy());
+                            currentCamera = camera;
+                            break;
+                        }
+                    }
+                }
+                startLive();
+            }
+
+            @Override
+            public void onError(int httpCode, String message) {
+                if (!isAdded() || fragmentView == null) {
+                    return;
+                }
+                fragmentView.findViewById(R.id.reconnect_button).setVisibility(VISIBLE);
+            }
+        });
     }
 
     public void stopLive() {

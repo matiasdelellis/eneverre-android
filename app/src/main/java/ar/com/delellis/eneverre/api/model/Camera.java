@@ -129,6 +129,11 @@ public class Camera implements Serializable {
         return capabilities != null && capabilities.hasPlayback();
     }
 
+    /** Whether the server can serve a JPEG snapshot for this camera (thumbnail endpoint). */
+    public boolean hasThumbnail() {
+        return capabilities != null && capabilities.hasThumbnail();
+    }
+
     public int getWidth() {
         return width;
     }

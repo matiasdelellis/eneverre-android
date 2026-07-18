@@ -71,6 +71,13 @@ public class SplashActivity extends AppCompatActivity {
                     goToLoginActivicy();
                     return;
                 }
+                if (secureStore.mustChangePassword()) {
+                    // A mandatory password change is still outstanding from login;
+                    // gate here too so a cold start can't skip it.
+                    startActivity(new Intent(SplashActivity.this, ChangePasswordActivity.class));
+                    finish();
+                    return;
+                }
                 if (pendingLink != null && EventShareLink.launch(SplashActivity.this, cameras, pendingLink)) {
                     finish();
                     return;

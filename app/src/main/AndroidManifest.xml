@@ -29,10 +29,16 @@
             android:name=".LoginActivity"
             android:exported="false" />
         <activity
+            android:name=".ChangePasswordActivity"
+            android:exported="false" />
+        <activity
             android:name=".CamerasActivity"
             android:exported="false" />
         <activity
             android:name=".AboutActivity"
+            android:exported="false" />
+        <activity
+            android:name=".SessionsActivity"
             android:exported="false" />
         <activity
             android:name=".SplashActivity"

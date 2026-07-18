@@ -3,11 +3,13 @@ package ar.com.delellis.eneverre.api;
 import java.util.List;
 
 import ar.com.delellis.eneverre.api.model.Camera;
+import ar.com.delellis.eneverre.api.model.ChangePasswordRequest;
 import ar.com.delellis.eneverre.api.model.EventsResponse;
 import ar.com.delellis.eneverre.api.model.LoginRequest;
 import ar.com.delellis.eneverre.api.model.LoginResponse;
 import ar.com.delellis.eneverre.api.model.RefreshRequest;
 import ar.com.delellis.eneverre.api.model.RefreshResponse;
+import ar.com.delellis.eneverre.api.model.SessionsResponse;
 import ar.com.delellis.eneverre.api.model.Recording;
 import ar.com.delellis.eneverre.api.model.RecordingsTimeline;
 import ar.com.delellis.eneverre.api.model.UpdateManifest;
@@ -16,8 +18,10 @@ import ar.com.delellis.eneverre.api.model.VerifyStatus;
 import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.http.Body;
+import retrofit2.http.DELETE;
 import retrofit2.http.GET;
 import retrofit2.http.POST;
+import retrofit2.http.PUT;
 import retrofit2.http.Path;
 import retrofit2.http.Query;
 import retrofit2.http.Url;
@@ -37,6 +41,30 @@ public interface ApiService {
 
     @GET("cameras")
     Call<List<Camera>> cameras();
+
+    /**
+     * Change the current user's password. Sent through the change-password flow
+     * the server mandates via {@code must_change_password} on login. The response
+     * body ({@code Message}) is ignored; a 2xx means it succeeded.
+     */
+    @PUT("users/me/password")
+    Call<Void> changePassword(@Body ChangePasswordRequest request);
+
+    /** Lists the current user's login sessions (active and expired). */
+    @GET("users/me/sessions")
+    Call<SessionsResponse> sessions();
+
+    /** Revokes one of the current user's sessions by id. */
+    @DELETE("users/me/sessions/{session_id}")
+    Call<Void> revokeSession(@Path("session_id") long session_id);
+
+    /**
+     * JPEG snapshot proxied from the camera (only when {@code capabilities.thumbnail}
+     * is set). Returns 404/502 on cameras without a reachable snapshot source, so
+     * callers must degrade to a placeholder.
+     */
+    @GET("camera/{device_id}/thumbnail")
+    Call<ResponseBody> thumbnail(@Path("device_id") String device_id);
 
     @POST("camera/{device_id}/ptz/home")
     Call<Void> home(@Path("device_id") String device_id);

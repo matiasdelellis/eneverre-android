@@ -144,6 +144,10 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
             });
             return true;
         }
+        else if (itemId == R.id.sessions) {
+            startActivity(new Intent(this, SessionsActivity.class));
+            return true;
+        }
         else if (itemId == R.id.logout) {
             confirmLogout();
             return true;
@@ -201,7 +205,11 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
 
                 String status = verifyStatus.getStatus();
                 if ("approved".equals(status)) {
-                    Toast.makeText(CamerasActivity.this, R.string.approved_device, LENGTH_LONG).show();
+                    String deviceName = verifyStatus.getDeviceName();
+                    String message = deviceName != null && !deviceName.trim().isEmpty()
+                            ? getString(R.string.approved_device_named, deviceName.trim())
+                            : getString(R.string.approved_device);
+                    Toast.makeText(CamerasActivity.this, message, LENGTH_LONG).show();
                 } else if ("expired".equals(status)) {
                     Toast.makeText(CamerasActivity.this, R.string.the_code_has_expired, LENGTH_LONG).show();
                 } else if ("invalid".equals(status)) {

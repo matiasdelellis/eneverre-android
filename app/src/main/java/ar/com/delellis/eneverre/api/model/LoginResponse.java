@@ -27,6 +27,15 @@ public class LoginResponse {
     @SerializedName("refresh_expires_at")
     private long refreshExpiresAt;
 
+    /**
+     * When true the client must send the user through the change-password flow
+     * ({@code PUT /api/users/me/password}) before using the app. Set for the
+     * seeded initial admin and for any account an admin flagged.
+     */
+    @Expose
+    @SerializedName("must_change_password")
+    private boolean mustChangePassword;
+
     public String getToken() {
         return token;
     }
@@ -41,5 +50,9 @@ public class LoginResponse {
 
     public long getRefreshExpiresAt() {
         return refreshExpiresAt;
+    }
+
+    public boolean isMustChangePassword() {
+        return mustChangePassword;
     }
 }
