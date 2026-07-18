@@ -527,10 +527,17 @@ public class LiveViewFragment extends Fragment {
             public void onEnd(@Nullable String reason) {
                 if (!isAdded()) return;
                 requireActivity().runOnUiThread(() -> {
-                    // Surface only real failures (HTTP status), not a normal release/close.
-                    if (reason != null && reason.startsWith("HTTP")) {
-                        int msg = reason.contains("409") ? R.string.talk_busy : R.string.talk_error;
-                        showTalkToast(msg, LENGTH_LONG);
+                    // Surface real failures, not a normal release/close.
+                    if (reason != null) {
+                        if (reason.startsWith("HTTP")) {
+                            int msg = reason.contains("409") ? R.string.talk_busy : R.string.talk_error;
+                            showTalkToast(msg, LENGTH_LONG);
+                        } else if (reason.contains("RTSP")) {
+                            // The server closes with reason "RTSP error: ..." when the
+                            // camera backchannel fails to come up (see TALK.md). Tell the
+                            // user instead of just dropping the talk panel silently.
+                            showTalkToast(R.string.talk_error, LENGTH_LONG);
+                        }
                     }
                     exitTalkMode();
                 });

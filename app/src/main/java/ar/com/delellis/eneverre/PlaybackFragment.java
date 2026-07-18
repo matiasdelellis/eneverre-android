@@ -663,37 +663,44 @@ public class PlaybackFragment extends Fragment {
         });
     }
 
+    /** Page size for the events endpoint (server caps `limit` at 1000). */
+    private static final int EVENTS_PAGE_SIZE = 500;
+
     private void getEvents(long since, long until) {
         eventsLoading = true;
         updateEventsPanelVisibility(getResources().getConfiguration().orientation);
-        ApiClient.getApiService().events(currentCamera.getId(), Time.MStoRFC3339(since), Time.MStoRFC3339(until)).enqueue(new ApiCallback<EventsResponse>(requireContext()) {
+        // The server defaults `limit` to 100 and reports the full match count as
+        // `total`; page through with `offset` so a busy window isn't silently
+        // truncated at the first 100 events.
+        fetchEventsPage(since, until, 0);
+    }
+
+    private void fetchEventsPage(long since, long until, int offset) {
+        ApiClient.getApiService().events(currentCamera.getId(), Time.MStoRFC3339(since),
+                Time.MStoRFC3339(until), EVENTS_PAGE_SIZE, offset).enqueue(new ApiCallback<EventsResponse>(requireContext()) {
             @Override
             public void onSuccess(EventsResponse body) {
-                eventsLoading = false;
                 if (body == null || body.getEvents() == null) {
-                    eventsLoaded = true;
-                    updateEventsPanelVisibility(getResources().getConfiguration().orientation);
+                    finishEventsLoad();
                     return;
                 }
 
-                for (Event event : body.getEvents()) {
+                List<Event> page = body.getEvents();
+                for (Event event : page) {
                     if (eventIds.add(event.getId())) {
                         events.add(event);
                     }
                 }
 
-                // Newest first for the list.
-                Collections.sort(events, (a, b) -> Long.compare(
-                        Time.RFC3339toMS(b.getStartTs()), Time.RFC3339toMS(a.getStartTs())));
+                // Keep paging while the server still has more than we've pulled
+                // (a short/empty page also means we've reached the end).
+                int fetched = offset + page.size();
+                if (!page.isEmpty() && fetched < body.getTotal()) {
+                    fetchEventsPage(since, until, fetched);
+                    return;
+                }
 
-                Log.i(TAG, "Event list size: " + events.size());
-
-                eventsAdapter.updateEvents(events);
-                renderEventsOnTimeline();
-
-                eventsLoaded = true;
-                hasEvents = !events.isEmpty();
-                updateEventsPanelVisibility(getResources().getConfiguration().orientation);
+                finishEventsLoad();
             }
 
             @Override
@@ -704,6 +711,23 @@ public class PlaybackFragment extends Fragment {
                 Toast.makeText(requireContext(), R.string.error_get_events, LENGTH_LONG).show();
             }
         });
+    }
+
+    private void finishEventsLoad() {
+        eventsLoading = false;
+
+        // Newest first for the list.
+        Collections.sort(events, (a, b) -> Long.compare(
+                Time.RFC3339toMS(b.getStartTs()), Time.RFC3339toMS(a.getStartTs())));
+
+        Log.i(TAG, "Event list size: " + events.size());
+
+        eventsAdapter.updateEvents(events);
+        renderEventsOnTimeline();
+
+        eventsLoaded = true;
+        hasEvents = !events.isEmpty();
+        updateEventsPanelVisibility(getResources().getConfiguration().orientation);
     }
 
     private void renderEventsOnTimeline() {

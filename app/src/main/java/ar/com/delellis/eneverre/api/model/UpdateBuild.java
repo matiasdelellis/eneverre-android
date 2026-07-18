@@ -7,12 +7,12 @@ import java.io.Serializable;
 
 public class UpdateBuild implements Serializable {
     @Expose
-    @SerializedName("abi")
-    private String abi;
+    @SerializedName("variant")
+    private String variant;
 
     @Expose
-    @SerializedName("apkFilename")
-    private String apkFilename;
+    @SerializedName("filename")
+    private String filename;
 
     @Expose
     @SerializedName("size")
@@ -23,15 +23,19 @@ public class UpdateBuild implements Serializable {
     private String sha256;
 
     @Expose
+    @SerializedName("contentType")
+    private String contentType;
+
+    @Expose
     @SerializedName("url")
     private String url;
 
-    public String getAbi() {
-        return abi;
+    public String getVariant() {
+        return variant;
     }
 
-    public String getApkFilename() {
-        return apkFilename;
+    public String getFilename() {
+        return filename;
     }
 
     public long getSize() {
@@ -40,6 +44,10 @@ public class UpdateBuild implements Serializable {
 
     public String getSha256() {
         return sha256;
+    }
+
+    public String getContentType() {
+        return contentType;
     }
 
     public String getUrl() {

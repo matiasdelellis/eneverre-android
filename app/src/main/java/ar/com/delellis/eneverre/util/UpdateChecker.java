@@ -213,13 +213,13 @@ public final class UpdateChecker {
         }
         for (String abi : Build.SUPPORTED_ABIS) {
             for (UpdateBuild build : builds) {
-                if (abi.equals(build.getAbi())) {
+                if (abi.equals(build.getVariant())) {
                     return build;
                 }
             }
         }
         for (UpdateBuild build : builds) {
-            if ("universal".equals(build.getAbi())) {
+            if ("universal".equals(build.getVariant())) {
                 return build;
             }
         }
@@ -268,7 +268,7 @@ public final class UpdateChecker {
         final Context appContext = activity.getApplicationContext();
         final String url = build.getUrl();
         final String expectedSha = build.getSha256();
-        final String apkFilename = build.getApkFilename();
+        final String apkFilename = build.getFilename();
 
         IO.execute(() -> {
             File apkFile = new File(appContext.getCacheDir(), CACHE_SUBDIR + "/" + apkFilename);
