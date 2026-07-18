@@ -236,6 +236,11 @@ public class ViewActivity extends AppCompatActivity
 
     @Override
     public void onPrivacyChanged(Camera camera, boolean enabled) {
+        // The camera the fragment toggled is a serialized copy, so fold the new
+        // privacy state back into this activity's location model (matched by id).
+        // finishWithResult() then hands the up-to-date state to the camera list.
+        location.getCameras().update(camera);
+
         if (enabled) {
             Toast.makeText(this, R.string.privacy_enabled, LENGTH_SHORT).show();
         } else {

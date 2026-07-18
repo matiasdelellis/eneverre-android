@@ -26,6 +26,7 @@ import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.UserCode;
 import ar.com.delellis.eneverre.api.model.VerifyStatus;
+import ar.com.delellis.eneverre.model.Cameras;
 import ar.com.delellis.eneverre.model.Location;
 import ar.com.delellis.eneverre.model.Locations;
 import ar.com.delellis.eneverre.util.ApiCallback;
@@ -56,9 +57,31 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
             result -> {
                 if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                     Location location = (Location) result.getData().getSerializableExtra(LOCATION_CAMERAS_DATA);
-                    // TODO: Update privacy icons.
+                    applyCameraChanges(location);
                 }
             });
+
+    /**
+     * Folds privacy (and any other mutable per-camera state) reported back by
+     * {@link ViewActivity} into the master {@link #locations} model, so changes
+     * made inside the app take effect on the camera list immediately without a
+     * server round-trip. The returned {@link Location} is a serialized copy, so
+     * we merge by id via {@link Cameras#update(Camera)} rather than by reference.
+     */
+    private void applyCameraChanges(Location changed) {
+        if (changed == null || locations == null) {
+            return;
+        }
+        Location master = locations.get(changed.getName());
+        if (master == null) {
+            return;
+        }
+        Cameras changedCameras = changed.getCameras();
+        for (int i = 0; i < changedCameras.count(); i++) {
+            master.getCameras().update(changedCameras.get(i));
+        }
+        locationsAdapter.notifyDataSetChanged();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
