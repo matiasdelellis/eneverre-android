@@ -156,10 +156,10 @@ jobs:
           # this workflow (or a re-run after a transient failure)
           # replaces the staged APK instead of "rotating" an
           # already-committed partial release.
-          echo "[1/2] POST $URL  (apk_arm64-v8a=$(basename "$ARM64_APK"), finalize=false)"
+          echo "[1/2] POST $URL  (build_arm64-v8a=$(basename "$ARM64_APK"), finalize=false)"
           RESPONSE=$(curl --max-time 1800 -sS -w "\n__HTTP__%{http_code}" \
             -H "Authorization: Bearer ${UPDATE_TOKEN}" \
-            -F "apk_arm64-v8a=@${ARM64_APK}" \
+            -F "build_arm64-v8a=@${ARM64_APK}" \
             -F "versionName=${VERSION_NAME}" \
             -F "versionCode=${VERSION_CODE}" \
             -F "finalize=false" \
@@ -174,10 +174,10 @@ jobs:
           fi
 
           echo
-          echo "[2/2] POST $URL  (apk_armeabi-v7a=$(basename "$ARMV7_APK"), finalize=true)"
+          echo "[2/2] POST $URL  (build_armeabi-v7a=$(basename "$ARMV7_APK"), finalize=true)"
           RESPONSE=$(curl --max-time 1800 -sS -w "\n__HTTP__%{http_code}" \
             -H "Authorization: Bearer ${UPDATE_TOKEN}" \
-            -F "apk_armeabi-v7a=@${ARMV7_APK}" \
+            -F "build_armeabi-v7a=@${ARMV7_APK}" \
             -F "versionName=${VERSION_NAME}" \
             -F "versionCode=${VERSION_CODE}" \
             -F "finalize=true" \
