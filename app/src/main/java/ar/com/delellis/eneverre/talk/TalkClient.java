@@ -12,6 +12,7 @@ import androidx.annotation.Nullable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -59,10 +60,14 @@ public class TalkClient {
         void onReady();
         /**
          * The session ended (user close or failure). {@code reason} is a close
-         * reason or {@code "HTTP <code>"} (401 auth, 404 unsupported, 409 busy).
+         * reason, {@code "HTTP <code>"} (401 auth, 404 unsupported, 409 busy), or
+         * {@link #REASON_MIC_UNAVAILABLE}. Delivered exactly once per session.
          */
         void onEnd(@Nullable String reason);
     }
+
+    /** {@link Listener#onEnd} reason when the microphone can't be captured. */
+    public static final String REASON_MIC_UNAVAILABLE = "mic-unavailable";
 
     private static final int SAMPLE_RATE = 16000;   // low rate → less uplink; see doc "Bandwidth"
     private static final int AAC_BIT_RATE = 32000;  // plenty for 16 kHz mono voice
@@ -83,6 +88,9 @@ public class TalkClient {
             .build();
 
     private WebSocket ws;
+    /** Guards {@link #deliverEnd}: onClosing→onClosed (and onFailure) would
+     * otherwise report the same session end two or three times. */
+    private final AtomicBoolean ended = new AtomicBoolean(false);
     private volatile boolean transmitting;
     /** AAC path only: true while the encoder + warm-up-silence session thread runs. */
     private volatile boolean aacSessionRunning;
@@ -135,22 +143,29 @@ public class TalkClient {
             @Override
             public void onClosing(WebSocket webSocket, int code, String reason) {
                 stop();
-                listener.onEnd(reason);
+                deliverEnd(reason);
             }
 
             @Override
             public void onClosed(WebSocket webSocket, int code, String reason) {
                 stop();
-                listener.onEnd(reason);
+                deliverEnd(reason);
             }
 
             @Override
             public void onFailure(WebSocket webSocket, Throwable t, @Nullable Response response) {
                 // response.code() is 401 / 404 / 409 for auth / capability / busy.
                 stop();
-                listener.onEnd(response != null ? "HTTP " + response.code() : t.getMessage());
+                deliverEnd(response != null ? "HTTP " + response.code() : t.getMessage());
             }
         });
+    }
+
+    /** Reports the session end to the listener at most once (see {@link #ended}). */
+    private void deliverEnd(@Nullable String reason) {
+        if (ended.compareAndSet(false, true)) {
+            listener.onEnd(reason);
+        }
     }
 
     /** Sets the mic gain (0 = silence, 1 = unity, >1 = amplify). */
@@ -193,10 +208,25 @@ public class TalkClient {
         }
         int minBuf = AudioRecord.getMinBufferSize(
                 SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+        // getMinBufferSize returns ERROR/ERROR_BAD_VALUE (negative) on a bad config;
+        // handing that to AudioRecord as a size would throw. Bail out cleanly.
+        if (minBuf <= 0) {
+            deliverEnd(REASON_MIC_UNAVAILABLE);
+            stop();
+            return;
+        }
         final AudioRecord recorder = new AudioRecord(
                 MediaRecorder.AudioSource.MIC,
                 SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
                 minBuf);
+        // The mic may be busy/unavailable; startRecording() on an uninitialized
+        // recorder throws IllegalStateException on the caller thread → crash.
+        if (recorder.getState() != AudioRecord.STATE_INITIALIZED) {
+            recorder.release();
+            deliverEnd(REASON_MIC_UNAVAILABLE);
+            stop();
+            return;
+        }
         recorder.startRecording();
         transmitting = true;
 
@@ -247,6 +277,12 @@ public class TalkClient {
 
         final int minBuf = AudioRecord.getMinBufferSize(
                 SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+        if (minBuf <= 0) {
+            aacSessionRunning = false;
+            deliverEnd(REASON_MIC_UNAVAILABLE);
+            stop();
+            return;
+        }
 
         MediaFormat format = MediaFormat.createAudioFormat(
                 MediaFormat.MIMETYPE_AUDIO_AAC, SAMPLE_RATE, 1);
@@ -260,7 +296,8 @@ public class TalkClient {
             codec.start();
         } catch (IOException | IllegalStateException | IllegalArgumentException e) {
             aacSessionRunning = false;
-            listener.onEnd("AAC encoder unavailable");
+            deliverEnd("AAC encoder unavailable");
+            stop();
             return;
         }
 
@@ -277,10 +314,19 @@ public class TalkClient {
                 while (aacSessionRunning) {
                     boolean tx = transmitting;
                     if (tx && recorder == null) {
-                        recorder = new AudioRecord(
+                        AudioRecord r = new AudioRecord(
                                 MediaRecorder.AudioSource.MIC,
                                 SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO,
                                 AudioFormat.ENCODING_PCM_16BIT, minBuf);
+                        // Mic busy/unavailable: end the session instead of
+                        // startRecording()-ing an uninitialized recorder (crash).
+                        if (r.getState() != AudioRecord.STATE_INITIALIZED) {
+                            r.release();
+                            deliverEnd(REASON_MIC_UNAVAILABLE);
+                            stop();   // clears aacSessionRunning and closes the socket
+                            break;
+                        }
+                        recorder = r;
                         recorder.startRecording();
                     } else if (!tx && recorder != null) {
                         // Back to silence: release the mic so the OS indicator turns

@@ -4,10 +4,11 @@ import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 import static android.widget.Toast.LENGTH_SHORT;
 
-import android.annotation.SuppressLint;
 import android.app.PictureInPictureParams;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Rational;
 import android.widget.Toast;
@@ -190,9 +191,23 @@ public class ViewActivity extends AppCompatActivity
         bottomNav.getMenu().findItem(R.id.nav_playback).setEnabled(supported);
     }
 
+    /**
+     * Whether this device can enter Picture-in-Picture. PiP params/entry need
+     * API 26+ (minSdk is 24) and the hardware/OS must advertise the feature —
+     * Android TV and some phones don't. The menu action is gated on this too.
+     */
+    public boolean isPipSupported() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
+    }
+
     /** Called by the visible {@link LiveViewFragment} from its menu. */
-    @SuppressLint("NewApi")
     public void enterPipMode(Camera camera) {
+        // Guard both the API level and the feature: without this, API 24/25 hit a
+        // missing PictureInPictureParams and unsupported devices throw on entry.
+        if (!isPipSupported()) {
+            return;
+        }
         Rational aspectRatio = new Rational(camera.getWidth(), camera.getHeight());
         PictureInPictureParams params = new PictureInPictureParams.Builder()
                 .setAspectRatio(aspectRatio)

@@ -50,28 +50,43 @@ public class VlcPlayer {
     }
 
     public void attachView(VLCVideoLayout videoLayout) {
-        mediaPlayer.attachViews(videoLayout, null, false, false);
+        if (mediaPlayer != null) {
+            mediaPlayer.attachViews(videoLayout, null, false, false);
+        }
     }
 
     public void detachViews() {
-        mediaPlayer.detachViews();
+        if (mediaPlayer != null) {
+            mediaPlayer.detachViews();
+        }
     }
 
     public void setEventListener(MediaPlayer.EventListener eventListener) {
-        mediaPlayer.setEventListener(eventListener);
+        if (mediaPlayer != null) {
+            mediaPlayer.setEventListener(eventListener);
+        }
     }
 
     public void playUri(Uri uri) {
+        if (mediaPlayer == null) {
+            return;
+        }
         currentMedia = new Media(libVlc, uri);
         currentMedia.setHWDecoderEnabled(true, false);
         mediaPlayer.setMedia(currentMedia);
+        // setMedia takes its own reference, so drop ours right away and clear the
+        // field: keeping it non-null would let a later stop()/release() free the
+        // same native Media a second time (over-release → native crash).
         currentMedia.release();
+        currentMedia = null;
 
         mediaPlayer.play();
     }
 
     public void stop() {
-        mediaPlayer.stop();
+        if (mediaPlayer != null) {
+            mediaPlayer.stop();
+        }
         if (currentMedia != null) {
             currentMedia.release();
             currentMedia = null;
@@ -79,15 +94,19 @@ public class VlcPlayer {
     }
 
     public boolean isPaused () {
-        return !mediaPlayer.isPlaying();
+        return mediaPlayer == null || !mediaPlayer.isPlaying();
     }
 
     public void pause () {
-        mediaPlayer.pause();
+        if (mediaPlayer != null) {
+            mediaPlayer.pause();
+        }
     }
 
     public void resume () {
-        mediaPlayer.play();
+        if (mediaPlayer != null) {
+            mediaPlayer.play();
+        }
     }
 
     public boolean isMuted () {
@@ -104,11 +123,15 @@ public class VlcPlayer {
 
     public void setVolume(int volume) {
         this.volume = volume;
-        mediaPlayer.setVolume(volume);
+        if (mediaPlayer != null) {
+            mediaPlayer.setVolume(volume);
+        }
     }
 
     /** Sets the playback speed (1.0 = normal, 2.0 = double). */
     public void setRate(float rate) {
-        mediaPlayer.setRate(rate);
+        if (mediaPlayer != null) {
+            mediaPlayer.setRate(rate);
+        }
     }
 }

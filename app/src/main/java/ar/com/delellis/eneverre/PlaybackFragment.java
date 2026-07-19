@@ -367,6 +367,7 @@ public class PlaybackFragment extends Fragment {
                 .enqueue(new ApiCallback<RecordingsTimeline>(requireContext()) {
                     @Override
                     public void onSuccess(RecordingsTimeline body) {
+                        if (viewGone()) return;
                         long end = (body != null) ? Time.RFC3339toMS(body.getEnd()) : -1L;
                         long start = (body != null) ? Time.RFC3339toMS(body.getStart()) : -1L;
                         recordingsEndMs = end;
@@ -391,6 +392,7 @@ public class PlaybackFragment extends Fragment {
 
                     @Override
                     public void onError(int httpCode, String message) {
+                        if (viewGone()) return;
                         Toast.makeText(requireContext(), R.string.error_get_recordings, LENGTH_LONG).show();
                     }
                 });
@@ -472,6 +474,17 @@ public class PlaybackFragment extends Fragment {
             controller = null;
         }
         super.onDestroyView();
+    }
+
+    /**
+     * True once the view is gone (detached / after onDestroyView). Network
+     * callbacks (recordings, events, download) can land after the user swipes the
+     * pager or rotates; touching {@code root}/adapters or calling
+     * {@code requireContext()} then throws. Every enqueue() callback early-returns
+     * on this.
+     */
+    private boolean viewGone() {
+        return !isAdded() || root == null;
     }
 
     private final MenuProvider playbackMenu = new MenuProvider() {
@@ -602,6 +615,7 @@ public class PlaybackFragment extends Fragment {
         ApiClient.getApiService().recording(currentCamera.getId(), startRFC333, duration).enqueue(new ApiCallback<ResponseBody>(requireContext()) {
             @Override
             public void onSuccess(ResponseBody body) {
+                if (viewGone()) return;
                 if (body == null) {
                     onError(ApiError.NO_HTTP_CODE, null);
                     return;
@@ -613,6 +627,7 @@ public class PlaybackFragment extends Fragment {
 
             @Override
             public void onError(int httpCode, String message) {
+                if (viewGone()) return;
                 Toast.makeText(requireContext(), R.string.error_download, LENGTH_LONG).show();
             }
         });
@@ -622,6 +637,7 @@ public class PlaybackFragment extends Fragment {
         ApiClient.getApiService().recordings(currentCamera.getId(), Time.MStoRFC3339(since), Time.MStoRFC3339(to)).enqueue(new ApiCallback<List<Recording>>(requireContext()) {
             @Override
             public void onSuccess(List<Recording> body) {
+                if (viewGone()) return;
                 recordings = body;
                 if (recordings == null || recordings.isEmpty()) {
                     Toast.makeText(requireContext(), R.string.there_is_no_recording, LENGTH_LONG).show();
@@ -658,6 +674,7 @@ public class PlaybackFragment extends Fragment {
 
             @Override
             public void onError(int httpCode, String message) {
+                if (viewGone()) return;
                 Toast.makeText(requireContext(), R.string.error_get_recordings, LENGTH_LONG).show();
             }
         });
@@ -680,6 +697,7 @@ public class PlaybackFragment extends Fragment {
                 Time.MStoRFC3339(until), EVENTS_PAGE_SIZE, offset).enqueue(new ApiCallback<EventsResponse>(requireContext()) {
             @Override
             public void onSuccess(EventsResponse body) {
+                if (viewGone()) return;
                 if (body == null || body.getEvents() == null) {
                     finishEventsLoad();
                     return;
@@ -705,6 +723,7 @@ public class PlaybackFragment extends Fragment {
 
             @Override
             public void onError(int httpCode, String message) {
+                if (viewGone()) return;
                 eventsLoading = false;
                 eventsLoaded = true;
                 updateEventsPanelVisibility(getResources().getConfiguration().orientation);

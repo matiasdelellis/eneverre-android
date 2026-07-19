@@ -108,7 +108,10 @@ public class LiveViewFragment extends Fragment {
             boolean privacy = currentCamera.getPrivacy();
             // The privacy toggle is offered only on cameras that support it.
             menu.findItem(R.id.privacy_action).setVisible(currentCamera.hasPrivacy() && !privacy);
-            menu.findItem(R.id.pip_action).setVisible(!privacy);
+            // Hide PiP where it isn't available (API < 26 or no PiP feature), so it
+            // can't be tapped into a no-op / crash on unsupported devices.
+            boolean pipSupported = ((ViewActivity) requireActivity()).isPipSupported();
+            menu.findItem(R.id.pip_action).setVisible(!privacy && pipSupported);
             menu.findItem(R.id.volume_action).setVisible(!privacy);
             menu.findItem(R.id.recalibrate_ptz).setVisible(currentCamera.getPtz() && !privacy);
             menu.findItem(R.id.volume_action).setIcon(
@@ -588,6 +591,8 @@ public class LiveViewFragment extends Fragment {
                         if (reason.startsWith("HTTP")) {
                             int msg = reason.contains("409") ? R.string.talk_busy : R.string.talk_error;
                             showTalkToast(msg, LENGTH_LONG);
+                        } else if (reason.equals(TalkClient.REASON_MIC_UNAVAILABLE)) {
+                            showTalkToast(R.string.talk_error, LENGTH_LONG);
                         } else if (reason.contains("RTSP")) {
                             // The server closes with reason "RTSP error: ..." when the
                             // camera backchannel fails to come up (see TALK.md). Tell the
