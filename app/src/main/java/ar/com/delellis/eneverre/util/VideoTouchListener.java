@@ -7,6 +7,7 @@ import android.graphics.PointF;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 
 /**
  * Touch handler for a video surface: pinch-to-zoom, drag-to-pan while zoomed,
@@ -19,6 +20,11 @@ import android.view.View;
  * l.setOnLongPressListener(...);
  * videoView.setOnTouchListener(l);
  * }</pre>
+ *
+ * When a PTZ pan listener is set and enabled, an unzoomed (1x) single-finger
+ * drag is reported as raw pixel deltas so the owner can drive the physical
+ * camera. While zoomed the drag keeps panning digitally, as before. This
+ * claims the unzoomed drag from any enclosing pager.
  */
 public class VideoTouchListener implements View.OnTouchListener {
 
@@ -28,12 +34,22 @@ public class VideoTouchListener implements View.OnTouchListener {
         void onLongPressEnd();
     }
 
+    /** Receives unzoomed drag deltas (in pixels) to convert into physical PTZ moves. */
+    public interface OnPtzPanListener {
+        void onPtzPan(float dxPixels, float dyPixels);
+        void onPtzPanEnd();
+    }
+
     private static final int NONE = 0;
     private static final int DRAG = 1;
     private static final int ZOOM = 2;
     private int touchMode = NONE;
 
     private final PointF lastEvent = new PointF();
+    /** Where the current gesture went down; PTZ panning starts only past the touch slop. */
+    private final PointF downEvent = new PointF();
+    /** System touch slop in pixels; resolved lazily (needs a Context from the view). */
+    private int touchSlop = -1;
     private float lastDistance = 1f;
     private float currentScale = 1f;
     private int maxScrollX = 0;
@@ -47,8 +63,26 @@ public class VideoTouchListener implements View.OnTouchListener {
     private OnLongPressListener longPressListener = null;
     private boolean longPressActive = false;
 
+    private OnPtzPanListener ptzPanListener = null;
+    private boolean ptzPanEnabled = false;
+    /** Whether the current DRAG delivered at least one PTZ delta (gates the end event). */
+    private boolean ptzPanning = false;
+
     public void setOnLongPressListener(OnLongPressListener listener) {
         longPressListener = listener;
+    }
+
+    public void setOnPtzPanListener(OnPtzPanListener listener) {
+        ptzPanListener = listener;
+    }
+
+    /** Toggled by the owner as PTZ availability changes (capability, privacy mode). */
+    public void setPtzPanEnabled(boolean enabled) {
+        ptzPanEnabled = enabled;
+    }
+
+    private boolean ptzPanActive() {
+        return ptzPanEnabled && ptzPanListener != null;
     }
 
     private final GestureDetector.SimpleOnGestureListener gestureListener =
@@ -93,6 +127,22 @@ public class VideoTouchListener implements View.OnTouchListener {
         }
     }
 
+    private void endPtzPan() {
+        if (ptzPanning) {
+            ptzPanning = false;
+            if (ptzPanListener != null) {
+                ptzPanListener.onPtzPanEnd();
+            }
+        }
+    }
+
+    private int touchSlop(View v) {
+        if (touchSlop < 0) {
+            touchSlop = ViewConfiguration.get(v.getContext()).getScaledTouchSlop();
+        }
+        return touchSlop;
+    }
+
     @Override
     @SuppressLint("ClickableViewAccessibility")
     public boolean onTouch(View v, MotionEvent event) {
@@ -105,20 +155,23 @@ public class VideoTouchListener implements View.OnTouchListener {
         switch (event.getAction() & MotionEvent.ACTION_MASK) {
             case MotionEvent.ACTION_DOWN:
                 lastEvent.set(event.getRawX(), event.getRawY());
+                downEvent.set(event.getRawX(), event.getRawY());
                 touchMode = DRAG;
-                // Only hijack the gesture from an enclosing pager when the video
-                // is zoomed in (and there is therefore something to pan).
-                // Otherwise let the ViewPager2 receive the swipe to change camera.
-                v.getParent().requestDisallowInterceptTouchEvent(currentScale > 1f);
+                // Hijack the gesture from an enclosing pager when the video is
+                // zoomed in (there is something to pan digitally) or the drag
+                // drives the physical PTZ. Otherwise let the ViewPager2 receive
+                // the swipe to change camera.
+                v.getParent().requestDisallowInterceptTouchEvent(currentScale > 1f || ptzPanActive());
                 break;
             case MotionEvent.ACTION_POINTER_DOWN:
                 lastDistance = getPinchDistance(event);
                 if (lastDistance > 10f) {
                     touchMode = ZOOM;
                     // A pinch is starting: keep the gesture for ourselves, and
-                    // cancel any in-progress hold so it doesn't stick at 2x.
+                    // cancel any in-progress hold or PTZ pan so they don't stick.
                     v.getParent().requestDisallowInterceptTouchEvent(true);
                     endLongPress();
+                    endPtzPan();
                 }
                 break;
             case MotionEvent.ACTION_UP:
@@ -126,11 +179,33 @@ public class VideoTouchListener implements View.OnTouchListener {
             case MotionEvent.ACTION_CANCEL:
                 touchMode = NONE;
                 endLongPress();
+                endPtzPan();
                 break;
             case MotionEvent.ACTION_MOVE:
                 if (touchMode == DRAG) {
                     if (currentScale <= 1f) {
-                        // Not zoomed: nothing to pan; let the pager handle paging.
+                        if (ptzPanActive()) {
+                            // Not zoomed on a PTZ camera: the drag moves the
+                            // physical camera instead of paging. Sub-slop MOVE
+                            // events still arrive for plain taps and double
+                            // taps, so panning starts only once the finger
+                            // clears the touch slop — otherwise every sloppy
+                            // tap would twitch the camera. The pre-slop offset
+                            // is dropped so the gesture starts from rest.
+                            if (!ptzPanning) {
+                                if (Math.hypot(event.getRawX() - downEvent.x,
+                                        event.getRawY() - downEvent.y) < touchSlop(v)) {
+                                    break;
+                                }
+                                ptzPanning = true;
+                                lastEvent.set(event.getRawX(), event.getRawY());
+                                break;
+                            }
+                            ptzPanListener.onPtzPan(event.getRawX() - lastEvent.x,
+                                    event.getRawY() - lastEvent.y);
+                            lastEvent.set(event.getRawX(), event.getRawY());
+                        }
+                        // Otherwise nothing to pan; let the pager handle paging.
                         break;
                     }
                     v.getParent().requestDisallowInterceptTouchEvent(true);

@@ -69,8 +69,13 @@ public interface ApiService {
     @POST("camera/{device_id}/ptz/home")
     Call<Void> home(@Path("device_id") String device_id);
 
+    /**
+     * Relative PTZ move in degrees (pan > 0 = right, tilt > 0 = down). The
+     * server converts to firmware steps using the camera's calibration and
+     * clamps to the mechanical range.
+     */
     @POST("camera/{device_id}/ptz/move")
-    Call<Void> move(@Path("device_id") String device_id, @Query("x") float x, @Query("y") float y);
+    Call<Void> move(@Path("device_id") String device_id, @Query("pan") float pan, @Query("tilt") float tilt);
 
     @POST("camera/{device_id}/ptz/recalibrate")
     Call<Void> recalibrate(@Path("device_id") String device_id);

@@ -65,9 +65,22 @@ public class LiveViewFragment extends Fragment {
 
     private static final String ARG_CURRENT_CAMERA = "current_camera";
 
+    /** Per-tap move of the PTZ pad buttons, in degrees. */
+    private static final float PTZ_BUTTON_STEP_DEGREES = 10f;
+    /** Throttle between in-drag move commands, so a drag doesn't flood the camera. */
+    private static final long PTZ_SEND_INTERVAL_MS = 250;
+    /** Minimum accumulated degrees before an in-drag command is worth sending. */
+    private static final float PTZ_MIN_SEND_DEGREES = 1f;
+
     private VlcPlayer vlcPlayer = null;
     private VLCVideoLayout vlcVideoLayout = null;
     private View fragmentView;
+
+    private VideoTouchListener videoTouchListener;
+    /** Drag rotation accumulated since the last sent move, in degrees. */
+    private float ptzPendingPan = 0f;
+    private float ptzPendingTilt = 0f;
+    private long ptzLastSend = 0;
 
     private Camera currentCamera;
 
@@ -192,12 +205,25 @@ public class LiveViewFragment extends Fragment {
         view.findViewById(R.id.reconnect_button).setVisibility(GONE);
         view.findViewById(R.id.exit_privacy_button).setVisibility(currentCamera.getPrivacy() ? VISIBLE : GONE);
         view.findViewById(R.id.loading_progress).setVisibility(currentCamera.getPrivacy() ? GONE : VISIBLE);
+
+        vlcVideoLayout = view.findViewById(R.id.vlc_video_Layout);
+        videoTouchListener = new VideoTouchListener();
+        videoTouchListener.setOnPtzPanListener(new VideoTouchListener.OnPtzPanListener() {
+            @Override
+            public void onPtzPan(float dxPixels, float dyPixels) {
+                accumulatePtzDrag(dxPixels, dyPixels);
+            }
+
+            @Override
+            public void onPtzPanEnd() {
+                sendPtzDrag(true);
+            }
+        });
+        vlcVideoLayout.setOnTouchListener(videoTouchListener);
+
         // PTZ controls stay on screen even when the camera lacks PTZ support, just
         // disabled, so the live view doesn't look empty.
         setPtzEnabled(currentCamera.getPtz());
-
-        vlcVideoLayout = view.findViewById(R.id.vlc_video_Layout);
-        vlcVideoLayout.setOnTouchListener(new VideoTouchListener());
 
         view.findViewById(R.id.reconnect_button).setVisibility(GONE);
         view.findViewById(R.id.reconnect_button).setOnClickListener(v -> {
@@ -278,19 +304,19 @@ public class LiveViewFragment extends Fragment {
         });
 
         view.findViewById(R.id.ptz_left_button).setOnClickListener(v -> {
-            apiService.move(currentCamera.getId(), -45f, 0f).enqueue(commandCallback());
+            sendPtzMove(-PTZ_BUTTON_STEP_DEGREES, 0f);
         });
 
         view.findViewById(R.id.ptz_right_button).setOnClickListener(v -> {
-            apiService.move(currentCamera.getId(), 45f, 0f).enqueue(commandCallback());
+            sendPtzMove(PTZ_BUTTON_STEP_DEGREES, 0f);
         });
 
         view.findViewById(R.id.ptz_up_button).setOnClickListener(v -> {
-            apiService.move(currentCamera.getId(), 0f, -45f).enqueue(commandCallback());
+            sendPtzMove(0f, -PTZ_BUTTON_STEP_DEGREES);
         });
 
         view.findViewById(R.id.ptz_down_button).setOnClickListener(v -> {
-            apiService.move(currentCamera.getId(), 0f, 45f).enqueue(commandCallback());
+            sendPtzMove(0f, PTZ_BUTTON_STEP_DEGREES);
         });
 
         setPipModeLayout(false);
@@ -421,6 +447,63 @@ public class LiveViewFragment extends Fragment {
             button.setEnabled(enabled);
             button.setAlpha(alpha);
         }
+        // Drag-to-PTZ on the video follows the same availability. While enabled
+        // it claims the unzoomed drag, so paging to another camera happens from
+        // the cameras list instead of a swipe on this page.
+        videoTouchListener.setPtzPanEnabled(enabled);
+    }
+
+    /** Sends a relative PTZ move in degrees (the server converts and clamps). */
+    private void sendPtzMove(float panDegrees, float tiltDegrees) {
+        apiService.move(currentCamera.getId(), panDegrees, tiltDegrees).enqueue(commandCallback());
+    }
+
+    /**
+     * Converts an in-progress drag into pending relative degrees: a drag
+     * across the full view width sweeps the camera by the lens's horizontal
+     * FOV (from the camera's ptz metadata), so the scene roughly follows the
+     * finger. The view keeps the video's aspect ratio, so a pixel spans the
+     * same angle on both axes and one degrees-per-pixel factor serves pan and
+     * tilt. The sign is inverted so the scene follows the finger, matching
+     * the digital pan while zoomed.
+     */
+    private void accumulatePtzDrag(float dxPixels, float dyPixels) {
+        int width = vlcVideoLayout.getWidth();
+        Camera.PtzMetadata metadata = currentCamera.getPtzMetadata();
+        if (width <= 0 || metadata == null || metadata.getFovH() <= 0f)
+            return;
+
+        float degreesPerPixel = metadata.getFovH() / width;
+        ptzPendingPan -= dxPixels * degreesPerPixel;
+        ptzPendingTilt -= dyPixels * degreesPerPixel;
+        sendPtzDrag(false);
+    }
+
+    /**
+     * Sends the accumulated drag as a relative move, throttled while the finger
+     * is down; the release flushes whatever remains so short drags still move.
+     */
+    private void sendPtzDrag(boolean flush) {
+        long now = System.currentTimeMillis();
+        if (!flush && now - ptzLastSend < PTZ_SEND_INTERVAL_MS)
+            return;
+
+        float magnitude = Math.max(Math.abs(ptzPendingPan), Math.abs(ptzPendingTilt));
+        if (magnitude < (flush ? 0.2f : PTZ_MIN_SEND_DEGREES)) {
+            if (flush) {
+                ptzPendingPan = 0f;
+                ptzPendingTilt = 0f;
+            }
+            return;
+        }
+
+        float pan = ptzPendingPan;
+        float tilt = ptzPendingTilt;
+        ptzPendingPan = 0f;
+        ptzPendingTilt = 0f;
+        ptzLastSend = now;
+
+        sendPtzMove(pan, tilt);
     }
 
     private void takeSnapshot() {

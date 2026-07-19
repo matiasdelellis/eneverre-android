@@ -46,6 +46,52 @@ public class Camera implements Serializable {
     @SerializedName("capabilities")
     private Capabilities capabilities;
 
+    // Public PTZ metadata block, present only when capabilities.ptz is true
+    // AND the server is new enough to expose it. Null on older servers, which
+    // is the signal to fall back to the legacy step-based move parameters.
+    @Expose
+    @SerializedName("ptz")
+    private PtzMetadata ptz;
+
+    /**
+     * Angular PTZ metadata: the lens field of view and the gimbal's travel
+     * range, all in degrees. The steps↔degrees calibration is server-side;
+     * clients talk to the move endpoint in degrees only.
+     */
+    public static class PtzMetadata implements Serializable {
+        @Expose
+        @SerializedName("fov_h")
+        private float fovH;
+
+        @Expose
+        @SerializedName("fov_v")
+        private float fovV;
+
+        @Expose
+        @SerializedName("pan_range")
+        private float panRange;
+
+        @Expose
+        @SerializedName("tilt_range")
+        private float tiltRange;
+
+        public float getFovH() {
+            return fovH;
+        }
+
+        public float getFovV() {
+            return fovV;
+        }
+
+        public float getPanRange() {
+            return panRange;
+        }
+
+        public float getTiltRange() {
+            return tiltRange;
+        }
+    }
+
     /**
      * Nested capability flags: whether the camera <em>supports</em> each feature.
      * These are the source of truth for what UI to offer. (Not to be confused with
@@ -144,6 +190,11 @@ public class Camera implements Serializable {
 
     public boolean getPtz() {
         return capabilities != null && capabilities.hasPtz();
+    }
+
+    /** Angular PTZ metadata; null on servers that predate the degree-based PTZ API. */
+    public PtzMetadata getPtzMetadata() {
+        return ptz;
     }
 
     /** Whether the camera supports privacy mode (drives whether the toggle is offered). */
