@@ -10,14 +10,28 @@
     <TextView
         android:id="@+id/location_name"
         style="@style/TextAppearance.AppCompat.Large"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:paddingHorizontal="20dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="8dp"
         android:paddingTop="10dp"
         android:maxLines="1"
+        android:ellipsize="end"
         android:text="@tools:sample/lorem/random"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="@id/mosaic_button"
+        app:layout_constraintEnd_toStartOf="@id/mosaic_button"
         app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@id/mosaic_button" />
+
+    <ImageButton
+        android:id="@+id/mosaic_button"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginEnd="12dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/mosaic_open"
+        android:src="@drawable/ic_grid_24"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
     <androidx.recyclerview.widget.RecyclerView
@@ -29,7 +43,7 @@
         android:nestedScrollingEnabled="false"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/location_name"
+        app:layout_constraintTop_toBottomOf="@id/mosaic_button"
         app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
         app:spanCount="2"
         tools:itemCount="3"

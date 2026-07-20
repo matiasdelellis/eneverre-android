@@ -25,6 +25,7 @@ import java.util.List;
 
 import ar.com.delellis.eneverre.adapter.LocationsAdapter;
 import ar.com.delellis.eneverre.adapter.OnCameraClickListener;
+import ar.com.delellis.eneverre.adapter.OnLocationClickListener;
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.model.Cameras;
@@ -38,7 +39,8 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
-public class CamerasActivity extends AppCompatActivity implements OnCameraClickListener {
+public class CamerasActivity extends AppCompatActivity
+        implements OnCameraClickListener, OnLocationClickListener {
 
     public static final String RAW_CAMERAS_LIST_DATA = "RAW_CAMERA_LIST";
     public static final String LOCATION_CAMERAS_DATA = "LOCATION_CAMERAS";
@@ -97,7 +99,7 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
             cameraList = new ArrayList<>();
         }
         locations = new Locations(cameraList);
-        locationsAdapter = new LocationsAdapter(this, locations, this);
+        locationsAdapter = new LocationsAdapter(this, locations, this, this);
         recyclerView.setAdapter(locationsAdapter);
 
         boolean empty = locations.count() == 0;
@@ -236,5 +238,12 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
         liveIntent.putExtra(LOCATION_CAMERAS_DATA, location);
         liveIntent.putExtra(SELECTED_CAMERA_DATA, position);
         liveViewLauncher.launch(liveIntent);
+    }
+
+    @Override
+    public void onMosaicClick(Location location) {
+        Intent mosaicIntent = new Intent(CamerasActivity.this, MosaicActivity.class);
+        mosaicIntent.putExtra(LOCATION_CAMERAS_DATA, location);
+        startActivity(mosaicIntent);
     }
 }

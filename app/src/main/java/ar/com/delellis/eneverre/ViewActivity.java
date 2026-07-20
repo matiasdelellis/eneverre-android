@@ -132,6 +132,19 @@ public class ViewActivity extends AppCompatActivity
                 }
             }
         });
+
+        // Apply the initial chrome visibility for the current orientation:
+        // onConfigurationChanged only fires on a later rotation, so launching
+        // straight into landscape (e.g. from the mosaic) would otherwise keep
+        // the toolbar and bottom bar showing until the first rotate.
+        updateChromeForOrientation(getResources().getConfiguration().orientation);
+    }
+
+    /** Hides the toolbar and bottom bar in landscape for a full-screen video. */
+    private void updateChromeForOrientation(int orientation) {
+        boolean landscape = orientation == Configuration.ORIENTATION_LANDSCAPE;
+        findViewById(R.id.app_bar).setVisibility(landscape ? GONE : VISIBLE);
+        bottomNav.setVisibility(landscape ? GONE : VISIBLE);
     }
 
     private void showLive() {
@@ -250,9 +263,7 @@ public class ViewActivity extends AppCompatActivity
             return;
         }
 
-        boolean landscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE;
-        findViewById(R.id.app_bar).setVisibility(landscape ? GONE : VISIBLE);
-        bottomNav.setVisibility(landscape ? GONE : VISIBLE);
+        updateChromeForOrientation(newConfig.orientation);
     }
 
     private void finishWithResult() {

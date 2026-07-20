@@ -17,11 +17,14 @@ public class LocationsAdapter extends RecyclerView.Adapter<LocationsViewHolder> 
     private final Context context;
     private final Locations locations;
     private final OnCameraClickListener listener;
+    private final OnLocationClickListener locationListener;
 
-    public LocationsAdapter(Context context, Locations locationList, OnCameraClickListener listener) {
+    public LocationsAdapter(Context context, Locations locationList,
+                            OnCameraClickListener listener, OnLocationClickListener locationListener) {
         this.context = context;
         this.locations = locationList;
         this.listener = listener;
+        this.locationListener = locationListener;
     }
 
     @NonNull
@@ -35,6 +38,11 @@ public class LocationsAdapter extends RecyclerView.Adapter<LocationsViewHolder> 
     public void onBindViewHolder(@NonNull LocationsViewHolder holder, int position) {
         Location location = locations.get(position);
         holder.setLocationName(location.getName());
+        holder.setOnMosaicClickListener(v -> {
+            if (locationListener != null) {
+                locationListener.onMosaicClick(location);
+            }
+        });
         CamerasAdapter adapter = new CamerasAdapter(context, location.getCameras(), listener);
         holder.setupRecyclerView(context, adapter);
     }

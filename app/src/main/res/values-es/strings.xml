@@ -25,6 +25,8 @@
     <string name="recalibrate_position">Recalibrar la posición…</string>
     <string name="cameras">Cámaras</string>
     <string name="cameras_empty">No hay cámaras disponibles</string>
+    <string name="mosaic_title">Mosaico</string>
+    <string name="mosaic_open">Ver todas las cámaras</string>
     <string name="record_clip">Grabar clip</string>
     <string name="take_snapshot">Capturar imagen</string>
     <string name="now">Ahora</string>
