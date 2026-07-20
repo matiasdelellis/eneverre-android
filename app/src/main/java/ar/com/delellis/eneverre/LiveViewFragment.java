@@ -53,6 +53,8 @@ import ar.com.delellis.eneverre.player.VlcPlayer;
 import ar.com.delellis.eneverre.talk.TalkClient;
 import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
+import ar.com.delellis.eneverre.util.StoragePermission;
+import ar.com.delellis.eneverre.util.VideoLayout;
 import ar.com.delellis.eneverre.util.AppPreferences;
 import ar.com.delellis.eneverre.util.Download;
 import ar.com.delellis.eneverre.util.Snapshot;
@@ -106,6 +108,10 @@ public class LiveViewFragment extends Fragment {
     private Toast talkToast = null;
     /** Launched on the first talk press if the mic permission is missing. */
     private ActivityResultLauncher<String> requestMicPermission;
+
+    private ActivityResultLauncher<String> requestStoragePermission;
+    /** Action to run once the storage permission is granted (see withStoragePermission). */
+    private Runnable pendingStorageAction;
 
     AppPreferences prefs = null;
 
@@ -181,6 +187,32 @@ public class LiveViewFragment extends Fragment {
                         Toast.makeText(requireContext(), R.string.talk_permission_required, LENGTH_LONG).show();
                     }
                 });
+
+        // Storage permission for saving snapshots/clips on API 24-28. On grant we
+        // run the action the user triggered; on denial we surface a message.
+        requestStoragePermission = registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(), granted -> {
+                    Runnable action = pendingStorageAction;
+                    pendingStorageAction = null;
+                    if (granted && action != null) {
+                        action.run();
+                    } else if (!granted) {
+                        Toast.makeText(requireContext(), R.string.error_storage_permission, LENGTH_LONG).show();
+                    }
+                });
+    }
+
+    /**
+     * Runs {@code action} if the storage permission is held (or unnecessary on
+     * this API level), otherwise requests it and defers the action until granted.
+     */
+    private void withStoragePermission(Runnable action) {
+        if (StoragePermission.isGranted(requireContext())) {
+            action.run();
+            return;
+        }
+        pendingStorageAction = action;
+        requestStoragePermission.launch(StoragePermission.PERMISSION);
     }
 
     @Override
@@ -245,16 +277,14 @@ public class LiveViewFragment extends Fragment {
         view.findViewById(R.id.record_button).setVisibility(VISIBLE);
         view.findViewById(R.id.record_button).setOnClickListener(v -> {
             if (!isRecording()) {
-                startLiveRecord();
+                withStoragePermission(this::startLiveRecord);
             } else {
                 downloadLiveRecord();
             }
         });
 
         view.findViewById(R.id.take_snapshot).setVisibility(VISIBLE);
-        view.findViewById(R.id.take_snapshot).setOnClickListener(v -> {
-            takeSnapshot();
-        });
+        view.findViewById(R.id.take_snapshot).setOnClickListener(v -> withStoragePermission(this::takeSnapshot));
 
         // Two-way audio: the mic FAB (shown only for backchannel-capable cameras,
         // hidden in privacy mode) opens talk mode, which swaps the PTZ controls for
@@ -396,7 +426,7 @@ public class LiveViewFragment extends Fragment {
             int videoHeight = currentCamera.getHeight();
 
             frameLayout.getLayoutParams().width = screenWidth;
-            frameLayout.getLayoutParams().height = screenWidth * videoHeight / videoWidth;
+            frameLayout.getLayoutParams().height = VideoLayout.portraitHeight(screenWidth, videoWidth, videoHeight);
         }
         else {
             frameLayout.setLayoutParams(

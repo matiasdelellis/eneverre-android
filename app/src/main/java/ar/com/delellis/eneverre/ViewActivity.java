@@ -23,8 +23,10 @@ import androidx.lifecycle.Lifecycle;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
+import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.model.Location;
+import ar.com.delellis.eneverre.util.VideoLayout;
 
 /**
  * Single host for a location's cameras, with bottom tabs:
@@ -62,6 +64,18 @@ public class ViewActivity extends AppCompatActivity
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Recreated cold (process death): the in-memory ApiClient singleton is
+        // gone. Bounce through the splash before the restored fragments try to
+        // use it, otherwise LiveViewFragment/PlaybackFragment crash on getApiService().
+        try {
+            ApiClient.getInstance();
+        } catch (IllegalStateException e) {
+            startActivity(new Intent(this, SplashActivity.class));
+            finish();
+            return;
+        }
+
         setContentView(R.layout.activity_view);
 
         Toolbar toolbar = findViewById(R.id.video_toolbar);
@@ -208,11 +222,16 @@ public class ViewActivity extends AppCompatActivity
         if (!isPipSupported()) {
             return;
         }
-        Rational aspectRatio = new Rational(camera.getWidth(), camera.getHeight());
+        Rational aspectRatio = VideoLayout.pipAspectRatio(camera.getWidth(), camera.getHeight());
         PictureInPictureParams params = new PictureInPictureParams.Builder()
                 .setAspectRatio(aspectRatio)
                 .build();
-        enterPictureInPictureMode(params);
+        try {
+            enterPictureInPictureMode(params);
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            // Device declined PiP entry (unsupported state or rejected ratio);
+            // stay in full-screen rather than crash.
+        }
     }
 
     @Override

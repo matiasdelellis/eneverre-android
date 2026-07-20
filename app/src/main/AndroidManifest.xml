@@ -5,6 +5,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Two-way audio: capture the mic to stream to the camera backchannel. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Saving snapshots/clips to the public Downloads folder needs this on
+         API 24-28 (the File path in Download.saveViaFile); API 29+ uses
+         MediaStore, which needs no storage permission. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
     <!-- Needed since API 26 to fire ACTION_INSTALL_PACKAGE for self-
          updates delivered via the eneverre-api auto-update endpoint. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />

@@ -41,6 +41,7 @@
     <string name="downloading">Downloading…</string>
     <string name="error_download">Failed to download the playback</string>
     <string name="error_snapshot">Failed to take camera snapshot</string>
+    <string name="error_storage_permission">Storage permission is required to save</string>
     <string name="error_get_recordings">Failed to get camera recordings</string>
     <string name="error_network">No network connection</string>
     <string name="error_unauthorized">Invalid username or password</string>

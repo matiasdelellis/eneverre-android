@@ -38,6 +38,7 @@
     <string name="downloading">Descargando…</string>
     <string name="error_download">No se pudo descargar la grabación</string>
     <string name="error_snapshot">No se pudo capturar la imagen de la cámara</string>
+    <string name="error_storage_permission">Se necesita permiso de almacenamiento para guardar</string>
     <string name="error_get_recordings">No se pudieron obtener las grabaciones de la cámara</string>
     <string name="error_network">Sin conexión a la red</string>
     <string name="error_unauthorized">Usuario o contraseña inválidos</string>

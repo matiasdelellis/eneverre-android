@@ -23,6 +23,8 @@ import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
@@ -62,7 +64,9 @@ import ar.com.delellis.eneverre.util.Download;
 import ar.com.delellis.eneverre.util.EventShareLink;
 import ar.com.delellis.eneverre.util.SecureStore;
 import ar.com.delellis.eneverre.util.Snapshot;
+import ar.com.delellis.eneverre.util.StoragePermission;
 import ar.com.delellis.eneverre.util.Time;
+import ar.com.delellis.eneverre.util.VideoLayout;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
 import ar.com.delellis.eneverre.widget.TimelineView;
 import ar.com.delellis.eneverre.widget.TimelineView.TimeRecord;
@@ -126,10 +130,40 @@ public class PlaybackFragment extends Fragment {
         return fragment;
     }
 
+    private ActivityResultLauncher<String> requestStoragePermission;
+    /** Action to run once the storage permission is granted (see withStoragePermission). */
+    private Runnable pendingStorageAction;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         currentCamera = (Camera) requireArguments().getSerializable(ARG_CAMERA);
+
+        // Storage permission for saving snapshots/clips on API 24-28. On grant we
+        // run the action the user triggered; on denial we surface a message.
+        requestStoragePermission = registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(), granted -> {
+                    Runnable action = pendingStorageAction;
+                    pendingStorageAction = null;
+                    if (granted && action != null) {
+                        action.run();
+                    } else if (!granted) {
+                        Toast.makeText(requireContext(), R.string.error_storage_permission, LENGTH_LONG).show();
+                    }
+                });
+    }
+
+    /**
+     * Runs {@code action} if the storage permission is held (or unnecessary on
+     * this API level), otherwise requests it and defers the action until granted.
+     */
+    private void withStoragePermission(Runnable action) {
+        if (StoragePermission.isGranted(requireContext())) {
+            action.run();
+            return;
+        }
+        pendingStorageAction = action;
+        requestStoragePermission.launch(StoragePermission.PERMISSION);
     }
 
     @Override
@@ -226,13 +260,15 @@ public class PlaybackFragment extends Fragment {
         view.findViewById(R.id.record_button).setOnClickListener(v -> {
             FloatingActionButton fab = (FloatingActionButton) v;
             if (startRecord < 0) {
-                startRecord = timelineView.getCurrent();
+                withStoragePermission(() -> {
+                    startRecord = timelineView.getCurrent();
 
-                fab.setImageResource(R.drawable.ic_stop_circle_24);
-                int color = ContextCompat.getColor(fab.getContext(), R.color.record_red);
-                fab.setImageTintList(ColorStateList.valueOf(color));
+                    fab.setImageResource(R.drawable.ic_stop_circle_24);
+                    int color = ContextCompat.getColor(fab.getContext(), R.color.record_red);
+                    fab.setImageTintList(ColorStateList.valueOf(color));
 
-                Toast.makeText(requireContext(), getString(R.string.starting_recording), LENGTH_SHORT).show();
+                    Toast.makeText(requireContext(), getString(R.string.starting_recording), LENGTH_SHORT).show();
+                });
             } else {
                 long stopRecord = timelineView.getCurrent();
 
@@ -254,7 +290,7 @@ public class PlaybackFragment extends Fragment {
             }
         });
 
-        view.findViewById(R.id.take_snapshot).setOnClickListener(v -> takeSnapshot());
+        view.findViewById(R.id.take_snapshot).setOnClickListener(v -> withStoragePermission(this::takeSnapshot));
 
         if (prefs.isGlobalMute()) {
             controller.mute(true);
@@ -573,7 +609,7 @@ public class PlaybackFragment extends Fragment {
             int videoHeight = currentCamera.getHeight();
 
             frameLayout.getLayoutParams().width = screenWidth;
-            frameLayout.getLayoutParams().height = screenWidth * videoHeight / videoWidth;
+            frameLayout.getLayoutParams().height = VideoLayout.portraitHeight(screenWidth, videoWidth, videoHeight);
         } else {
             timelineFrame.setVisibility(GONE);
 

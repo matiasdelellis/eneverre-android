@@ -9,6 +9,7 @@ import ar.com.delellis.eneverre.BuildConfig;
 import ar.com.delellis.eneverre.api.auth.BearerInterceptor;
 import ar.com.delellis.eneverre.api.auth.SessionManager;
 import ar.com.delellis.eneverre.api.auth.TokenAuthenticator;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.logging.HttpLoggingInterceptor;
 import retrofit2.Retrofit;
@@ -119,7 +120,18 @@ public class ApiClient {
      * the URL is safe to build and log.
      */
     public String getPlaybackStreamUrl(String device_id, String start, double duration) {
-        return getApiBase() + "camera/" + device_id + "/recordings/get?start=" + start + "&duration=" + duration;
+        // Build via HttpUrl so query values are percent-encoded: the RFC3339
+        // `start` carries a timezone offset like "+02:00", and a raw "+" in the
+        // query decodes server-side as a space, breaking playback in UTC+ zones.
+        return HttpUrl.get(getApiBase()).newBuilder()
+                .addPathSegment("camera")
+                .addPathSegment(device_id)
+                .addPathSegment("recordings")
+                .addPathSegment("get")
+                .addQueryParameter("start", start)
+                .addQueryParameter("duration", String.valueOf(duration))
+                .build()
+                .toString();
     }
 
     /**

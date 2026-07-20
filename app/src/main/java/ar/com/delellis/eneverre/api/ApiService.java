@@ -24,6 +24,7 @@ import retrofit2.http.POST;
 import retrofit2.http.PUT;
 import retrofit2.http.Path;
 import retrofit2.http.Query;
+import retrofit2.http.Streaming;
 import retrofit2.http.Url;
 
 public interface ApiService {
@@ -63,6 +64,7 @@ public interface ApiService {
      * is set). Returns 404/502 on cameras without a reachable snapshot source, so
      * callers must degrade to a placeholder.
      */
+    @Streaming
     @GET("camera/{device_id}/thumbnail")
     Call<ResponseBody> thumbnail(@Path("device_id") String device_id);
 
@@ -86,6 +88,7 @@ public interface ApiService {
     @GET("camera/{device_id}/recordings/list")
     Call<List<Recording>> recordings(@Path("device_id") String device_id, @Query("start") String start, @Query("end") String end);
 
+    @Streaming
     @GET("camera/{device_id}/recordings/get")
     Call<ResponseBody> recording(@Path("device_id") String device_id, @Query("start") String start, @Query("duration") double duration);
 
@@ -116,6 +119,7 @@ public interface ApiService {
      * Downloads the APK at an absolute URL returned by the update manifest.
      * Uses {@code @Url} so the call bypasses Retrofit's base-URL composition.
      */
+    @Streaming
     @GET
     Call<ResponseBody> downloadUpdate(@Url String url);
 }

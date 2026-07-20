@@ -219,6 +219,11 @@ public class VideoTouchListener implements View.OnTouchListener {
                 } else if (touchMode == ZOOM) {
                     float newDistance = getPinchDistance(event);
                     setScale(v.getScaleX() * (newDistance / lastDistance));
+                    // Advance the reference distance so the next MOVE scales by the
+                    // incremental change. Without this, every MOVE multiplies the
+                    // (already grown) scale by the ratio to the *initial* distance,
+                    // compounding it and snapping straight to the max zoom.
+                    lastDistance = newDistance;
                     clampScroll();
                 }
                 break;

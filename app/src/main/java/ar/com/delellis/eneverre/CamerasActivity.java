@@ -130,6 +130,17 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Recreated cold (process death): the in-memory ApiClient singleton is
+        // gone, so bounce through the splash to re-init it before any request.
+        try {
+            ApiClient.getInstance();
+        } catch (IllegalStateException e) {
+            startActivity(new Intent(this, SplashActivity.class));
+            finish();
+            return;
+        }
+
         setContentView(R.layout.activity_cameras);
 
         Toolbar myToolbar = findViewById(R.id.cameras_toolbar);
