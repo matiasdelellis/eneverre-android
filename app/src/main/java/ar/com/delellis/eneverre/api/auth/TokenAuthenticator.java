@@ -16,14 +16,21 @@ import okhttp3.Route;
  */
 public class TokenAuthenticator implements Authenticator {
     private final SessionManager session;
+    private final String apiHost;
 
-    public TokenAuthenticator(SessionManager session) {
+    public TokenAuthenticator(SessionManager session, String apiHost) {
         this.session = session;
+        this.apiHost = apiHost;
     }
 
     @Nullable
     @Override
     public Request authenticate(@Nullable Route route, Response response) {
+        // Only ever renew/retry against the API host: a 401 from a third-party
+        // update-download host must not cause a token to be attached to the retry.
+        if (apiHost == null || !apiHost.equalsIgnoreCase(response.request().url().host())) {
+            return null;
+        }
         // Never try to renew the login/refresh calls themselves, and give up
         // after a single retry to avoid an infinite 401 loop.
         if (AuthPaths.isAuthEndpoint(response.request()) || responseCount(response) >= 2) {

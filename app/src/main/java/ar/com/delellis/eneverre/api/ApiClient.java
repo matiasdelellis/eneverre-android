@@ -47,8 +47,8 @@ public class ApiClient {
         OkHttpClient.Builder httpClient = new OkHttpClient.Builder();
         // Stamp the Bearer token on every request, and transparently renew it on
         // a 401 and retry. No username/password is involved or stored.
-        httpClient.addInterceptor(new BearerInterceptor(session));
-        httpClient.authenticator(new TokenAuthenticator(session));
+        httpClient.addInterceptor(new BearerInterceptor(session, this.baseUrl));
+        httpClient.authenticator(new TokenAuthenticator(session, this.baseUrl));
 
         if (BuildConfig.DEBUG) {
             HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
