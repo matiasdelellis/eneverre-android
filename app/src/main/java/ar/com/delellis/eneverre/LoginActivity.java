@@ -17,7 +17,11 @@ import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
+import android.view.View;
+
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import java.io.Serializable;
 import java.net.MalformedURLException;
@@ -47,6 +51,17 @@ public class LoginActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
+
+        // With targetSdk 35 the app draws edge-to-edge; pad the scroll content by
+        // the on-screen keyboard (IME) or the navigation bar, whichever is taller,
+        // so the login button stays reachable when the keyboard is open.
+        View loginScroll = findViewById(R.id.login_scroll);
+        ViewCompat.setOnApplyWindowInsetsListener(loginScroll, (v, insets) -> {
+            int ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+            int bars = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
+            v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), Math.max(ime, bars));
+            return insets;
+        });
 
         secureStore = SecureStore.getInstance(this);
 

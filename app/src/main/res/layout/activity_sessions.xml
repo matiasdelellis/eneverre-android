@@ -14,7 +14,7 @@
             android:id="@+id/sessions_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            app:navigationIconTint="@color/black"
+            app:navigationIconTint="?attr/colorOnSurface"
             app:title="@string/my_sessions" />
 
     </com.google.android.material.appbar.AppBarLayout>

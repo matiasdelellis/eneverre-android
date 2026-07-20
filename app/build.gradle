@@ -135,6 +135,7 @@ dependencies {
     implementation libs.material
     implementation libs.recyclerview
     implementation libs.cardview
+    implementation libs.swiperefreshlayout
 
     implementation libs.security.crypto
 

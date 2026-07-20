@@ -852,7 +852,7 @@ public class TimelineView extends View {
         final String date;
 
         if (System.currentTimeMillis() - _selectedMsec < 5000) {
-            time = "Now";
+            time = getContext().getString(R.string.now);
             isNow = true;
         } else {
             time = _timedateFormatter.getStringTime(_selectedMsecDate);

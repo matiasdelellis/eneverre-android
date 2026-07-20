@@ -7,17 +7,23 @@ import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import ar.com.delellis.eneverre.adapter.LocationsAdapter;
@@ -52,6 +58,10 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
 
     private LocationsAdapter locationsAdapter = null;
 
+    private RecyclerView recyclerView = null;
+    private SwipeRefreshLayout swipeRefresh = null;
+    private TextView emptyView = null;
+
     private final ActivityResultLauncher<Intent> liveViewLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -83,6 +93,40 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
         locationsAdapter.notifyDataSetChanged();
     }
 
+    /**
+     * (Re)builds the location model and adapter from a flat camera list and
+     * toggles the empty state. Tolerates a {@code null} list (treated as empty)
+     * so a blank/absent server response can't crash {@link Locations}.
+     */
+    private void showCameras(List<Camera> cameraList) {
+        if (cameraList == null) {
+            cameraList = new ArrayList<>();
+        }
+        locations = new Locations(cameraList);
+        locationsAdapter = new LocationsAdapter(this, locations, this);
+        recyclerView.setAdapter(locationsAdapter);
+
+        boolean empty = locations.count() == 0;
+        emptyView.setVisibility(empty ? View.VISIBLE : View.GONE);
+        recyclerView.setVisibility(empty ? View.GONE : View.VISIBLE);
+    }
+
+    /** Re-fetches the camera list from the server for pull-to-refresh. */
+    private void refreshCameras() {
+        ApiClient.getApiService().cameras().enqueue(new ApiCallback<List<Camera>>(this) {
+            @Override
+            public void onSuccess(List<Camera> cameras) {
+                swipeRefresh.setRefreshing(false);
+                showCameras(cameras);
+            }
+            @Override
+            public void onError(int httpCode, String message) {
+                swipeRefresh.setRefreshing(false);
+                super.onError(httpCode, message);
+            }
+        });
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -94,12 +138,24 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
         Intent intent = getIntent();
         List<Camera> cameraList = (List<Camera>) intent.getSerializableExtra(RAW_CAMERAS_LIST_DATA);
 
-        RecyclerView recyclerView = findViewById(R.id.camera_list_view);
+        recyclerView = findViewById(R.id.camera_list_view);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-        locations = new Locations(cameraList);
-        locationsAdapter = new LocationsAdapter(this, locations, this);
-        recyclerView.setAdapter(locationsAdapter);
+        emptyView = findViewById(R.id.cameras_empty);
+
+        swipeRefresh = findViewById(R.id.cameras_refresh);
+        swipeRefresh.setOnRefreshListener(this::refreshCameras);
+
+        // Reserve room below the last row for the gesture/navigation bar: with
+        // targetSdk 35 Android 15 draws the app edge-to-edge, so the system bar
+        // insets are ours to consume.
+        ViewCompat.setOnApplyWindowInsetsListener(recyclerView, (v, insets) -> {
+            int bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
+            v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), bottom);
+            return insets;
+        });
+
+        showCameras(cameraList);
 
         // Opened from a device-linking link (<host>/?usercode=XXXXXX): confirm
         // before authorizing, instead of asking the user to type the code.

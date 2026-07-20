@@ -1,9 +1,9 @@
 <resources>
-    <string name="app_name">Eneverre</string>
+    <string name="app_name" translatable="false">Eneverre</string>
     <string name="loginLabel">Login</string>
     <string name="passwordHint">Password</string>
     <string name="usernameHint">Username</string>
-    <string name="serverHint">https://</string>
+    <string name="serverHint" translatable="false">https://</string>
     <string name="required_configuration">Required configuration</string>
     <string name="change_password_title">Set a new password</string>
     <string name="change_password_message">Your account requires a new password before you can continue.</string>
@@ -26,11 +26,15 @@
     <string name="mute">Mute</string>
     <string name="recalibrate_position">Recalibrate the position…</string>
     <string name="cameras">Cameras</string>
+    <string name="cameras_empty">No cameras available</string>
+    <string name="record_clip">Record clip</string>
+    <string name="take_snapshot">Take snapshot</string>
+    <string name="now">Now</string>
     <string name="enter_privacy_mode">Activate privacy mode</string>
     <string name="exit_privacy_mode">Exit privacy mode</string>
     <string name="picture_in_picture">Picture in Picture</string>
     <string name="playback">Playback</string>
-    <string name="playback_speed_2x">2×</string>
+    <string name="playback_speed_2x" translatable="false">2×</string>
     <string name="live">Live</string>
     <string name="pause">Pause</string>
     <string name="download_30_seconds">Download 30 seconds</string>
