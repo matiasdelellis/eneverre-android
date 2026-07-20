@@ -271,7 +271,18 @@ public final class UpdateChecker {
         final String apkFilename = build.getFilename();
 
         IO.execute(() -> {
-            File apkFile = new File(appContext.getCacheDir(), CACHE_SUBDIR + "/" + apkFilename);
+            // The filename comes from the (server-controlled) manifest; a crafted
+            // "../../.." would otherwise write outside the cache. Keep only the
+            // bare name, then verify the result still resolves inside updatesDir.
+            File updatesDir = new File(appContext.getCacheDir(), CACHE_SUBDIR);
+            String safeName = new File(apkFilename == null ? "" : apkFilename).getName();
+            File apkFile = new File(updatesDir, safeName);
+            if (safeName.isEmpty() || !isWithin(updatesDir, apkFile)) {
+                Log.e(TAG, "Rejected unsafe update filename: " + apkFilename);
+                postError(activity, R.string.update_download_failed);
+                return;
+            }
+
             String computedSha;
             try {
                 computedSha = downloadAndHash(appContext, url, apkFile);
@@ -298,6 +309,16 @@ public final class UpdateChecker {
             }
             install(appContext, apkFile);
         });
+    }
+
+    /** True if {@code file} resolves to a path inside {@code dir} (blocks path traversal). */
+    private static boolean isWithin(File dir, File file) {
+        try {
+            String dirPath = dir.getCanonicalPath() + File.separator;
+            return file.getCanonicalPath().startsWith(dirPath);
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /**
