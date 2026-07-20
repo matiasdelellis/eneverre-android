@@ -151,10 +151,11 @@ public class LoginActivity extends AppCompatActivity {
                 ApiClient.getInstance().setTokens(
                         response.getToken(), response.getRefreshToken(), response.getExpiresAt());
 
+                // Persist the flag unconditionally: a clean login where the server
+                // no longer mandates a change must clear any stale "true" left by a
+                // prior session, or a later cold start would force a change nobody asked for.
+                secureStore.setMustChangePassword(response.isMustChangePassword());
                 if (response.isMustChangePassword()) {
-                    // The server mandates a password change before the app is usable.
-                    // Persist it so a later cold start (which skips login) still gates.
-                    secureStore.setMustChangePassword(true);
                     startActivity(new Intent(LoginActivity.this, ChangePasswordActivity.class));
                     finish();
                     return;
@@ -175,6 +176,10 @@ public class LoginActivity extends AppCompatActivity {
         ApiClient.getApiService().cameras().enqueue(new ApiCallback<List<Camera>>(this) {
             @Override
             public void onSuccess(List<Camera> cameras) {
+                if (cameras == null) {
+                    onError(ApiError.NO_HTTP_CODE, getString(R.string.error_server));
+                    return;
+                }
                 Log.i(TAG, "Go to cameras view");
                 Intent intent = new Intent(LoginActivity.this, CamerasActivity.class);
                 intent.putExtra(CamerasActivity.RAW_CAMERAS_LIST_DATA, (Serializable) cameras);

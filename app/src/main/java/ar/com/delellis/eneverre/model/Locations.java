@@ -42,6 +42,10 @@ public class Locations implements Serializable {
                     new Location(entry.getValue().get(0).getLocation(), new Cameras(entry.getValue()))
             );
         }
+
+        // HashMap iteration order is arbitrary, so sort locations by name for a
+        // stable, predictable order on screen (cameras within each are sorted above).
+        locationList.sort((a, b) -> a.getName().compareToIgnoreCase(b.getName()));
     }
 
     public Location get(int i) {

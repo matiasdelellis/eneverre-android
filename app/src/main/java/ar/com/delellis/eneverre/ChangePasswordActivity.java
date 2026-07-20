@@ -116,6 +116,12 @@ public class ChangePasswordActivity extends AppCompatActivity {
         ApiClient.getApiService().cameras().enqueue(new ApiCallback<List<Camera>>(this) {
             @Override
             public void onSuccess(List<Camera> cameras) {
+                if (cameras == null) {
+                    // Empty/absent body: bounce through the splash to re-validate + re-list.
+                    startActivity(new Intent(ChangePasswordActivity.this, SplashActivity.class));
+                    finish();
+                    return;
+                }
                 Intent intent = new Intent(ChangePasswordActivity.this, CamerasActivity.class);
                 intent.putExtra(CamerasActivity.RAW_CAMERAS_LIST_DATA, (Serializable) cameras);
                 startActivity(intent);

@@ -113,6 +113,9 @@ public class LiveViewFragment extends Fragment {
     /** Action to run once the storage permission is granted (see withStoragePermission). */
     private Runnable pendingStorageAction;
 
+    /** Pending delayed clip download, kept so it can be cancelled on teardown. */
+    private Runnable recordDownloadRunnable;
+
     AppPreferences prefs = null;
 
     /** Live controls in the host toolbar; only the resumed (visible) page contributes. */
@@ -141,7 +144,7 @@ public class LiveViewFragment extends Fragment {
         public boolean onMenuItemSelected(@NonNull MenuItem item) {
             int itemId = item.getItemId();
             if (itemId == R.id.privacy_action) {
-                setVideoPrivacyLayout(true);
+                togglePrivacy(true);
                 stopLive();
                 return true;
             } else if (itemId == R.id.pip_action) {
@@ -267,7 +270,7 @@ public class LiveViewFragment extends Fragment {
 
         view.findViewById(R.id.exit_privacy_button).setVisibility(GONE);
         view.findViewById(R.id.exit_privacy_button).setOnClickListener(v -> {
-            setVideoPrivacyLayout(false);
+            togglePrivacy(false);
 
             prepareLive();
             setMuteLive(prefs.isGlobalMute());
@@ -355,12 +358,19 @@ public class LiveViewFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        if (currentCamera.getPrivacy())
-            setVideoPrivacyLayout(true);
-        else {
+        if (currentCamera.getPrivacy()) {
+            // Apply the existing privacy state to the UI only: no server command,
+            // no toast — this is a resume, not a user toggle.
+            applyPrivacyLayout(true);
+        } else {
+            boolean alreadyLive = vlcPlayer != null;
             prepareLive();
             setMuteLive(prefs.isGlobalMute());
-            startLive();
+            // Returning from Picture-in-Picture the player is still streaming;
+            // re-issuing playUri would tear down and reconnect the RTSP session.
+            if (!alreadyLive) {
+                startLive();
+            }
         }
     }
 
@@ -378,6 +388,12 @@ public class LiveViewFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
+        // Cancel a queued clip download so its runnable can't fire on a detached
+        // fragment (it calls requireActivity()/requireContext()).
+        if (fragmentView != null && recordDownloadRunnable != null) {
+            fragmentView.removeCallbacks(recordDownloadRunnable);
+            recordDownloadRunnable = null;
+        }
         // Safety net: onPause keeps the player alive while in Picture-in-Picture
         // so it keeps streaming in the mini-window. When that window is then
         // dismissed the activity is torn down without another onPause, so this
@@ -385,6 +401,11 @@ public class LiveViewFragment extends Fragment {
         exitTalkMode();
         stopLive();
         super.onDestroyView();
+    }
+
+    /** True once the fragment is detached or its view is gone: late callbacks must bail. */
+    private boolean viewGone() {
+        return !isAdded() || fragmentView == null;
     }
 
     @Override
@@ -437,7 +458,12 @@ public class LiveViewFragment extends Fragment {
         updateControlRegionVisibility();
     }
 
-    private void setVideoPrivacyLayout(boolean privacy) {
+    /**
+     * Applies the privacy state to the UI only (buttons, overlay, PTZ, talk,
+     * menu). Carries no side effects toward the server or the host, so it is
+     * safe to call on every resume to reflect the current state.
+     */
+    private void applyPrivacyLayout(boolean privacy) {
         fragmentView.findViewById(R.id.take_snapshot).setEnabled(!privacy);
         fragmentView.findViewById(R.id.record_button).setEnabled(!privacy);
 
@@ -454,15 +480,24 @@ public class LiveViewFragment extends Fragment {
         fragmentView.findViewById(R.id.privacy_cover).setVisibility(privacy ? VISIBLE : GONE);
 
         setPtzEnabled(currentCamera.getPtz() && !privacy);
+        updateTalkButtonVisibility();
+
+        // Privacy hides the pip/volume/recalibrate actions — refresh the menu.
+        requireActivity().invalidateOptionsMenu();
+    }
+
+    /**
+     * User-initiated privacy toggle: applies the UI, sends the command to the
+     * server and reports the change to the host (which shows the toast). Unlike
+     * {@link #applyPrivacyLayout}, this must run only once per user action.
+     */
+    private void togglePrivacy(boolean privacy) {
+        applyPrivacyLayout(privacy);
 
         apiService.privacy(currentCamera.getId(), privacy).enqueue(commandCallback());
 
         currentCamera.setPrivacy(privacy);
         privacyListener.onPrivacyChanged(currentCamera, privacy);
-        updateTalkButtonVisibility();
-
-        // Privacy hides the pip/volume/recalibrate actions — refresh the menu.
-        requireActivity().invalidateOptionsMenu();
     }
 
     /** Enables/disables the PTZ buttons, dimming them when disabled so they read as inactive. */
@@ -541,11 +576,17 @@ public class LiveViewFragment extends Fragment {
         Snapshot.getSurfaceBitmap(surfaceView, new Snapshot.PixelCopyListener() {
             @Override
             public void onSurfaceBitmapReady(Bitmap bitmap) {
+                if (viewGone()) {
+                    return;
+                }
                 String fileName = Download.buildFileName(currentCamera.getName(), Time.MStoFriendlyURL(System.currentTimeMillis()), "png");
                 Download.saveSnapshotAndShare(requireActivity(), bitmap, fileName, currentCamera.getName());
             }
             @Override
             public void onSurfaceBitmapError(int errorCode) {
+                if (viewGone()) {
+                    return;
+                }
                 Toast.makeText(requireContext(), R.string.error_snapshot, LENGTH_LONG).show();
             }
         });
@@ -831,10 +872,15 @@ public class LiveViewFragment extends Fragment {
         long _startRecord = startRecord;
         long stopRecord = System.currentTimeMillis();
 
-        fragmentView.postDelayed(() -> {
+        recordDownloadRunnable = () -> {
+            recordDownloadRunnable = null;
+            if (viewGone()) {
+                return;
+            }
             double duration = (double) (stopRecord - _startRecord) / 1000.0;
             downloadPlayback(_startRecord, duration);
-        }, 2500);
+        };
+        fragmentView.postDelayed(recordDownloadRunnable, 2500);
 
         FloatingActionButton fab = fragmentView.findViewById(R.id.record_button);
         fab.setImageResource(R.drawable.ic_video_cam_24);
@@ -854,6 +900,9 @@ public class LiveViewFragment extends Fragment {
         apiService.recording(currentCamera.getId(), startDownload, duration).enqueue(new ApiCallback<ResponseBody>(requireContext()) {
             @Override
             public void onSuccess(ResponseBody body) {
+                if (viewGone()) {
+                    return;
+                }
                 if (body == null) {
                     onError(ApiError.NO_HTTP_CODE, null);
                     return;
@@ -866,6 +915,9 @@ public class LiveViewFragment extends Fragment {
 
             @Override
             public void onError(int httpCode, String message) {
+                if (viewGone()) {
+                    return;
+                }
                 Toast.makeText(requireContext(), R.string.error_download, LENGTH_LONG).show();
             }
         });

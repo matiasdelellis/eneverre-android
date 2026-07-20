@@ -55,6 +55,8 @@ public class GaplessPlaybackController implements Media3Player.Listener {
         void onPositionMs(long absoluteMs);
         /** A real server error stopped playback; the UI should offer to retry. */
         void onRetryableError();
+        /** Playback reached the end of the available footage (nothing left to play). */
+        void onPlaybackEnded();
     }
 
     private final Media3Player player;
@@ -194,6 +196,7 @@ public class GaplessPlaybackController implements Media3Player.Listener {
             player.continueToNextIfAvailable();
         } else {
             listener.onBuffering(false); // genuine end of available footage
+            listener.onPlaybackEnded();
         }
     }
 
@@ -218,6 +221,7 @@ public class GaplessPlaybackController implements Media3Player.Listener {
             long nextStart = nextRecordingStartAfter(failedStart);
             if (nextStart < 0) {
                 listener.onBuffering(false); // nothing servable left
+                listener.onPlaybackEnded();
                 return;
             }
             Log.w(TAG, "No segment at #" + index + " and no hint, jumping to next recording @ " + Time.MStoRFC3339(nextStart));

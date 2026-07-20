@@ -49,6 +49,7 @@
     <string name="error_unexpected">Unexpected error</string>
     <string name="retry">Retry</string>
     <string name="there_is_no_recording">There is no recording</string>
+    <string name="playback_reached_end">End of the available recordings</string>
     <string name="no_recordings">No recordings</string>
     <string name="events">Events</string>
     <string name="event_motion">Motion</string>

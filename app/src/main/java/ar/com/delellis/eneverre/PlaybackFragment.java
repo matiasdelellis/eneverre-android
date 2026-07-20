@@ -255,6 +255,19 @@ public class PlaybackFragment extends Fragment {
                             timelineView.setMajor1Records(fakeRecordingEvents);
                         }
                     }
+
+                    @Override
+                    public void onPlaybackEnded() {
+                        if (viewGone()) return;
+                        root.findViewById(R.id.loading_progress).setVisibility(GONE);
+                        // Footage ran out: stop advancing and reflect it in the menu
+                        // icon (which otherwise stays on "pause", implying it plays).
+                        if (controller != null) {
+                            controller.pause();
+                        }
+                        requireActivity().invalidateOptionsMenu();
+                        Snackbar.make(root, R.string.playback_reached_end, Snackbar.LENGTH_SHORT).show();
+                    }
                 });
 
         view.findViewById(R.id.record_button).setOnClickListener(v -> {
@@ -533,6 +546,16 @@ public class PlaybackFragment extends Fragment {
             // Sharing is only meaningful on a fixed https build (see shareMoment).
             if (!BuildConfig.API_HOST.startsWith("https://")) {
                 menu.findItem(R.id.share_moment).setVisible(false);
+            }
+        }
+
+        @Override
+        public void onPrepareMenu(@NonNull Menu menu) {
+            // Keep the play/pause icon in sync with the actual playback state, so
+            // an invalidate (e.g. when footage ends) reflects "paused" correctly.
+            MenuItem pause = menu.findItem(R.id.pause_action);
+            if (pause != null && controller != null) {
+                pause.setIcon(controller.isPaused() ? R.drawable.ic_play_24 : R.drawable.ic_pause_24);
             }
         }
 
