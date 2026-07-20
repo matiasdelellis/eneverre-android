@@ -1,7 +1,5 @@
 package ar.com.delellis.eneverre;
 
-import static android.widget.Toast.LENGTH_LONG;
-
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.Menu;
@@ -9,7 +7,6 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -30,16 +27,13 @@ import ar.com.delellis.eneverre.adapter.LocationsAdapter;
 import ar.com.delellis.eneverre.adapter.OnCameraClickListener;
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.model.Camera;
-import ar.com.delellis.eneverre.api.model.UserCode;
-import ar.com.delellis.eneverre.api.model.VerifyStatus;
 import ar.com.delellis.eneverre.model.Cameras;
 import ar.com.delellis.eneverre.model.Location;
 import ar.com.delellis.eneverre.model.Locations;
 import ar.com.delellis.eneverre.util.ApiCallback;
-import ar.com.delellis.eneverre.util.ApiError;
+import ar.com.delellis.eneverre.util.DeviceLinker;
 import ar.com.delellis.eneverre.util.SecureStore;
 import ar.com.delellis.eneverre.util.UpdateChecker;
-import ar.com.delellis.eneverre.util.UserCodePickerDialog;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -172,7 +166,7 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
         // before authorizing, instead of asking the user to type the code.
         String pendingUserCode = intent.getStringExtra(EXTRA_PENDING_USER_CODE);
         if (pendingUserCode != null && !pendingUserCode.isEmpty()) {
-            confirmDeviceLink(pendingUserCode.toUpperCase());
+            DeviceLinker.confirm(this, pendingUserCode.toUpperCase());
         }
 
         // Fire the auto-update check from the first long-lived activity on
@@ -180,15 +174,6 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
         // before the response can come back, so the dialog would be dropped
         // if fired from there. Runs at most once per cold start.
         UpdateChecker.checkForUpdate(this);
-    }
-
-    private void confirmDeviceLink(String userCode) {
-        new MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.link_device)
-                .setMessage(getString(R.string.link_device_confirm, userCode))
-                .setPositiveButton(R.string.accept, (dialog, which) -> onUserCodeRequest(userCode))
-                .setNegativeButton(R.string.cancel, null)
-                .show();
     }
 
     @Override
@@ -203,12 +188,6 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
         int itemId = item.getItemId();
         if (itemId == R.id.about) {
             startActivity(new Intent(this, AboutActivity.class));
-            return true;
-        }
-        else if (itemId == R.id.linkDevice) {
-            UserCodePickerDialog.show(this, code -> {
-                onUserCodeRequest(code);
-            });
             return true;
         }
         else if (itemId == R.id.sessions) {
@@ -257,36 +236,5 @@ public class CamerasActivity extends AppCompatActivity implements OnCameraClickL
         liveIntent.putExtra(LOCATION_CAMERAS_DATA, location);
         liveIntent.putExtra(SELECTED_CAMERA_DATA, position);
         liveViewLauncher.launch(liveIntent);
-    }
-
-    private void onUserCodeRequest(String user_code) {
-        UserCode userCode = new UserCode(user_code);
-
-        ApiClient.getApiService().device_verify(userCode).enqueue(new ApiCallback<VerifyStatus>(this) {
-            @Override
-            public void onSuccess(VerifyStatus verifyStatus) {
-                if (verifyStatus == null) {
-                    onError(ApiError.NO_HTTP_CODE, null);
-                    return;
-                }
-
-                String status = verifyStatus.getStatus();
-                if ("approved".equals(status)) {
-                    String deviceName = verifyStatus.getDeviceName();
-                    String message = deviceName != null && !deviceName.trim().isEmpty()
-                            ? getString(R.string.approved_device_named, deviceName.trim())
-                            : getString(R.string.approved_device);
-                    Toast.makeText(CamerasActivity.this, message, LENGTH_LONG).show();
-                } else if ("expired".equals(status)) {
-                    Toast.makeText(CamerasActivity.this, R.string.the_code_has_expired, LENGTH_LONG).show();
-                } else if ("invalid".equals(status)) {
-                    Toast.makeText(CamerasActivity.this, R.string.invalid_user_code, LENGTH_LONG).show();
-                }
-            }
-            @Override
-            public void onError(int httpCode, String message) {
-                Toast.makeText(CamerasActivity.this, R.string.device_linking_failed, LENGTH_LONG).show();
-            }
-        });
     }
 }

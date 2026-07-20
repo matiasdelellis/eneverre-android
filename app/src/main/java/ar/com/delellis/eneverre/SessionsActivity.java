@@ -15,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.ArrayList;
@@ -26,6 +27,8 @@ import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.model.Session;
 import ar.com.delellis.eneverre.api.model.SessionsResponse;
 import ar.com.delellis.eneverre.util.ApiCallback;
+import ar.com.delellis.eneverre.util.DeviceLinker;
+import ar.com.delellis.eneverre.util.UserCodePickerDialog;
 
 /**
  * "My sessions" screen: lists the user's active login sessions and lets them
@@ -70,6 +73,10 @@ public class SessionsActivity extends AppCompatActivity implements SessionsAdapt
 
         adapter = new SessionsAdapter(this, sessions, this);
         list.setAdapter(adapter);
+
+        MaterialButton linkDeviceButton = findViewById(R.id.link_device_button);
+        linkDeviceButton.setOnClickListener(v ->
+                UserCodePickerDialog.show(this, code -> DeviceLinker.verify(this, code)));
 
         loadSessions();
     }
