@@ -182,6 +182,10 @@ public class CamerasActivity extends AppCompatActivity
     public boolean onCreateOptionsMenu(Menu menu) {
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.cameras_top_app_bar, menu);
+        // User administration is admin-only (also enforced server-side). The flag
+        // was persisted at login; a session predating this feature stays hidden
+        // until the next login, which is acceptable.
+        menu.findItem(R.id.users).setVisible(SecureStore.getInstance().isAdmin());
         return true;
     }
 
@@ -190,6 +194,10 @@ public class CamerasActivity extends AppCompatActivity
         int itemId = item.getItemId();
         if (itemId == R.id.about) {
             startActivity(new Intent(this, AboutActivity.class));
+            return true;
+        }
+        else if (itemId == R.id.users) {
+            startActivity(new Intent(this, UsersActivity.class));
             return true;
         }
         else if (itemId == R.id.sessions) {

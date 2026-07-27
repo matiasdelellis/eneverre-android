@@ -3,6 +3,11 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/users"
+        android:title="@string/manage_users"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/sessions"
         android:title="@string/my_sessions"
         app:showAsAction="never" />

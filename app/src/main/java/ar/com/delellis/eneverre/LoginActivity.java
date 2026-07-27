@@ -155,6 +155,9 @@ public class LoginActivity extends AppCompatActivity {
                 // no longer mandates a change must clear any stale "true" left by a
                 // prior session, or a later cold start would force a change nobody asked for.
                 secureStore.setMustChangePassword(response.isMustChangePassword());
+                // Persisted unconditionally for the same reason: a clean login must
+                // overwrite any stale admin flag from a prior session on this device.
+                secureStore.setIsAdmin(response.isAdmin());
                 if (response.isMustChangePassword()) {
                     startActivity(new Intent(LoginActivity.this, ChangePasswordActivity.class));
                     finish();

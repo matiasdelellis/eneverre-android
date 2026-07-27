@@ -36,6 +36,15 @@ public class LoginResponse {
     @SerializedName("must_change_password")
     private boolean mustChangePassword;
 
+    /**
+     * Whether the account has the admin role. Derived server-side from
+     * {@code role == "admin"}; the client persists it (see {@code SecureStore})
+     * to gate the user-administration screen.
+     */
+    @Expose
+    @SerializedName("is_admin")
+    private boolean isAdmin;
+
     public String getToken() {
         return token;
     }
@@ -54,5 +63,9 @@ public class LoginResponse {
 
     public boolean isMustChangePassword() {
         return mustChangePassword;
+    }
+
+    public boolean isAdmin() {
+        return isAdmin;
     }
 }

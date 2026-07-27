@@ -4,6 +4,7 @@ import java.util.List;
 
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.ChangePasswordRequest;
+import ar.com.delellis.eneverre.api.model.CreateUserRequest;
 import ar.com.delellis.eneverre.api.model.EventsResponse;
 import ar.com.delellis.eneverre.api.model.LoginRequest;
 import ar.com.delellis.eneverre.api.model.LoginResponse;
@@ -13,6 +14,10 @@ import ar.com.delellis.eneverre.api.model.SessionsResponse;
 import ar.com.delellis.eneverre.api.model.Recording;
 import ar.com.delellis.eneverre.api.model.RecordingsTimeline;
 import ar.com.delellis.eneverre.api.model.UpdateManifest;
+import ar.com.delellis.eneverre.api.model.UpdateNameRequest;
+import ar.com.delellis.eneverre.api.model.UpdatePasswordRequest;
+import ar.com.delellis.eneverre.api.model.UpdateRoleRequest;
+import ar.com.delellis.eneverre.api.model.User;
 import ar.com.delellis.eneverre.api.model.UserCode;
 import ar.com.delellis.eneverre.api.model.VerifyStatus;
 import okhttp3.ResponseBody;
@@ -58,6 +63,35 @@ public interface ApiService {
     /** Revokes one of the current user's sessions by id. */
     @DELETE("users/me/sessions/{session_id}")
     Call<Void> revokeSession(@Path("session_id") long session_id);
+
+    // --- User administration (admin only; gated server-side by role == "admin") ---
+
+    /** Lists every account. */
+    @GET("users")
+    Call<List<User>> users();
+
+    /**
+     * Creates a user. Server returns a message body (ignored — a 2xx means it
+     * succeeded); a duplicate username comes back as {@code 400 "User exists"}.
+     */
+    @POST("users")
+    Call<Void> createUser(@Body CreateUserRequest request);
+
+    /** Updates a user's first/last name. */
+    @PUT("users/{username}/name")
+    Call<Void> updateUserName(@Path("username") String username, @Body UpdateNameRequest request);
+
+    /** Changes a user's role. The server rejects demoting the last admin with a 400. */
+    @PUT("users/{username}/role")
+    Call<Void> updateUserRole(@Path("username") String username, @Body UpdateRoleRequest request);
+
+    /** Resets a user's password (revokes their sessions server-side). */
+    @PUT("users/{username}/password")
+    Call<Void> updateUserPassword(@Path("username") String username, @Body UpdatePasswordRequest request);
+
+    /** Deletes a user. The server rejects deleting the last admin with a 400. */
+    @DELETE("users/{username}")
+    Call<Void> deleteUser(@Path("username") String username);
 
     /**
      * JPEG snapshot proxied from the camera (only when {@code capabilities.thumbnail}

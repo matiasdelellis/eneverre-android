@@ -17,6 +17,7 @@ public class SecureStore {
     private static final String KEY_REFRESH_TOKEN = "eneverre_refresh_token";
     private static final String KEY_ACCESS_EXPIRES_AT = "eneverre_access_expires_at";
     private static final String KEY_MUST_CHANGE_PASSWORD = "eneverre_must_change_password";
+    private static final String KEY_IS_ADMIN = "eneverre_is_admin";
 
     private static SecureStore instance;
 
@@ -82,6 +83,7 @@ public class SecureStore {
                 .remove(KEY_REFRESH_TOKEN)
                 .remove(KEY_ACCESS_EXPIRES_AT)
                 .remove(KEY_MUST_CHANGE_PASSWORD)
+                .remove(KEY_IS_ADMIN)
                 .apply();
     }
 
@@ -96,6 +98,18 @@ public class SecureStore {
     }
     public void setMustChangePassword(boolean must) {
         prefs.edit().putBoolean(KEY_MUST_CHANGE_PASSWORD, must).apply();
+    }
+
+    /**
+     * Whether the logged-in account is an admin ({@code is_admin} on login).
+     * Persisted so the returning session — which skips login — can still gate
+     * admin-only UI (e.g. the user-administration screen) without a fresh login.
+     */
+    public boolean isAdmin() {
+        return prefs.getBoolean(KEY_IS_ADMIN, false);
+    }
+    public void setIsAdmin(boolean isAdmin) {
+        prefs.edit().putBoolean(KEY_IS_ADMIN, isAdmin).apply();
     }
 
     public String getConfigHost() {

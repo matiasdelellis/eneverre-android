@@ -51,6 +51,13 @@
             android:name=".SessionsActivity"
             android:exported="false" />
         <activity
+            android:name=".UsersActivity"
+            android:exported="false" />
+        <activity
+            android:name=".UserEditActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
             android:name=".SplashActivity"
             android:exported="true">
             <intent-filter>
