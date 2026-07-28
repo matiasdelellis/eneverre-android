@@ -12,6 +12,7 @@ import android.text.method.HideReturnsTransformationMethod;
 import android.text.method.PasswordTransformationMethod;
 import android.util.Log;
 import android.view.MotionEvent;
+import android.view.autofill.AutofillManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
@@ -147,6 +148,10 @@ public class LoginActivity extends AppCompatActivity {
                     return;
                 }
                 Log.i(TAG, "Valid login: saving session");
+                // The credentials are known good: commit the autofill context so the
+                // password manager offers to store them. Must happen before we
+                // navigate away — see commitAutofill().
+                commitAutofill();
                 secureStore.setConfigHost(host);
                 ApiClient.getInstance().setTokens(
                         response.getToken(), response.getRefreshToken(), response.getExpiresAt());
@@ -198,9 +203,58 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void resetForm(String message) {
+        // The credentials were rejected: drop the autofill context so the password
+        // manager is never offered a wrong username/password to save.
+        cancelAutofill();
         Toast.makeText(LoginActivity.this, message, Toast.LENGTH_LONG).show();
         progressBar.setVisibility(GONE);
         logingButton.setEnabled(true);
+    }
+
+    /**
+     * Ends the autofill session as a success, which is what triggers the "save
+     * password?" prompt. Android only commits the context by itself when the
+     * activity finishes on its own terms; this flow finishes while starting the
+     * next activity, so the prompt has to be requested explicitly. Without it the
+     * password manager never stores a credential for this app, and therefore never
+     * suggests one on a later login.
+     */
+    private void commitAutofill() {
+        AutofillManager autofill = autofillManager();
+        if (autofill != null) {
+            autofill.commit();
+        }
+    }
+
+    /** Ends the autofill session as a failure, discarding what the user typed. */
+    private void cancelAutofill() {
+        AutofillManager autofill = autofillManager();
+        if (autofill != null) {
+            autofill.cancel();
+        }
+    }
+
+    /**
+     * The autofill service, or null below API 26 (minSdk is 24).
+     *
+     * Deliberately not gated on {@link AutofillManager#isEnabled()}: commit/cancel
+     * are no-ops when no service is active, so testing it would only add a way to
+     * skip the call. It is logged instead, because "no service configured in
+     * Settings" is indistinguishable from an app-side bug from the outside.
+     */
+    private AutofillManager autofillManager() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            Log.i(TAG, "Autofill: unsupported below API 26 (running " + Build.VERSION.SDK_INT + ")");
+            return null;
+        }
+        AutofillManager autofill = getSystemService(AutofillManager.class);
+        if (autofill == null) {
+            Log.w(TAG, "Autofill: no AutofillManager service");
+            return null;
+        }
+        Log.i(TAG, "Autofill: enabled=" + autofill.isEnabled()
+                + " supported=" + autofill.isAutofillSupported());
+        return autofill;
     }
 
     private void togglePasswordVisibility() {
