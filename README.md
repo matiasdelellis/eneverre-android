@@ -31,6 +31,22 @@ workflow does it for you.
    in, so anyone can point it at their own [eneverre-server](https://github.com/matiasdelellis/eneverre-server)
    from the login screen.
 
-> The separate `Publish Update` workflow rebuilds the same code with an
-> `API_HOST` baked in and pushes it to your server as an auto-update — it
-> only runs when the extra `API_HOST` and `UPDATE_PUBLISH_TOKEN` secrets are set.
+### Branded builds & auto-updates 📡
+If you run your own [eneverre-server](https://github.com/matiasdelellis/eneverre-server),
+the separate [`Publish Update`](.github/workflows/publish-update.yml) workflow
+turns the generic client into a build tailored to *your* server. It rebuilds
+the exact same source, but with two extra secrets that change everything:
+
+* **`API_HOST`** — the URL of your eneverre-server, baked into the APK at build
+  time. With it set, the app already knows where to connect, so the **login
+  screen no longer asks for the server URL** — users just enter their
+  credentials.
+* **`UPDATE_PUBLISH_TOKEN`** — an admin token for your server. With it set, the
+  workflow **uploads the built `arm64-v8a` and `armeabi-v7a` APKs to your
+  eneverre-server**, which then offers them to your users as in-app updates
+  (`track=phone`). Bump the version, run the workflow, and every device gets
+  the new build automatically.
+
+Run it manually from the *Actions* tab (passing the `versionName` you bumped in
+`app/build.gradle`); it never runs on its own and fails fast if either secret is
+missing.
