@@ -12,7 +12,7 @@
         style="@style/TextAppearance.AppCompat.Large"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:paddingStart="20dp"
+        android:paddingStart="18dp"
         android:paddingEnd="8dp"
         android:paddingTop="10dp"
         android:maxLines="1"

@@ -11,6 +11,13 @@
 
     <style name="Theme.Eneverre" parent="Base.Theme.Eneverre" />
 
+    <!-- Branded toolbar title, used on the main screen where the title is the app name. -->
+    <style name="TextAppearance.Eneverre.Toolbar.Title" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:textSize">26sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/brand_primary</item>
+    </style>
+
     <!-- Forces a fully circular FAB (Material 3 FABs are rounded squares by default). -->
     <style name="ShapeAppearanceOverlay.Eneverre.Fab.Circle" parent="">
         <item name="cornerFamily">rounded</item>

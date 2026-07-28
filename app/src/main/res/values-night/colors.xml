@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lighter brand blue, so the logo and the title keep enough contrast on dark surfaces. -->
+    <color name="brand_primary">#4FB3E8</color>
+</resources>

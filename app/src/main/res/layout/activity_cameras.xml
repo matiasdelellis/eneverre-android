@@ -17,9 +17,11 @@
             android:id="@+id/cameras_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            app:navigationIconTint="?attr/colorOnSurface"
+            app:navigationIcon="@drawable/ic_eneverre_logo_24"
+            app:navigationIconTint="@color/brand_primary"
             app:menu="@menu/video_top_app_bar"
-            app:title="@string/cameras">
+            app:title="@string/app_name"
+            app:titleTextAppearance="@style/TextAppearance.Eneverre.Toolbar.Title">
         </com.google.android.material.appbar.MaterialToolbar>
 
     </com.google.android.material.appbar.AppBarLayout>
