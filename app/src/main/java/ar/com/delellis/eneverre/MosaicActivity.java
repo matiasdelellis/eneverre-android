@@ -3,6 +3,8 @@ package ar.com.delellis.eneverre;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.os.Bundle;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
 
@@ -16,6 +18,7 @@ import ar.com.delellis.eneverre.adapter.MosaicPagerAdapter;
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.model.Locations;
 import ar.com.delellis.eneverre.player.VlcPlayer;
+import ar.com.delellis.eneverre.util.AppPreferences;
 
 /**
  * Hosts a {@link ViewPager2} of {@link MosaicFragment}s — one live camera grid
@@ -23,16 +26,24 @@ import ar.com.delellis.eneverre.player.VlcPlayer;
  * instead of going back to the camera list to pick another one.
  *
  * The activity owns the single shared {@link LibVLC} engine every page's cells
- * play on (see {@link MosaicFragment.SharedLibVlcProvider}) and releases it once
- * in {@link #onDestroy}. Which streams run is up to the fragments: the pager
- * caps every page but the current one to {@code STARTED} and each fragment
- * streams only while resumed, so exactly one location streams at a time.
+ * play on (see {@link MosaicHost}) and releases it once in
+ * {@link #onDestroy}. Which streams run is up to the fragments: the pager caps
+ * every page but the current one to {@code STARTED} and each fragment streams
+ * only while resumed, so exactly one location streams at a time.
+ *
+ * The toolbar also switches every page's view mode between the scrolling grid and
+ * one that fits the whole location on screen. The choice is remembered in
+ * {@link AppPreferences} and pushed to the page currently on screen, the only one
+ * registered as a {@link MosaicHost.LayoutModeListener}; the others read the
+ * preference when they resume.
  */
-public class MosaicActivity extends AppCompatActivity implements MosaicFragment.SharedLibVlcProvider {
+public class MosaicActivity extends AppCompatActivity implements MosaicHost {
 
     private Locations locations;
     private LibVLC libVlc;
     private ViewPager2 viewPager;
+    private boolean fitToScreen;
+    private MosaicHost.LayoutModeListener layoutModeListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,6 +78,7 @@ public class MosaicActivity extends AppCompatActivity implements MosaicFragment.
             return;
         }
 
+        fitToScreen = AppPreferences.getInstance(this).isMosaicFitToScreen();
         libVlc = VlcPlayer.newLibVlc(this);
 
         viewPager.setAdapter(new MosaicPagerAdapter(this, locations));
@@ -104,8 +116,58 @@ public class MosaicActivity extends AppCompatActivity implements MosaicFragment.
     }
 
     @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.mosaic_top_app_bar, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        MenuItem item = menu.findItem(R.id.mosaic_view_mode);
+        // Nothing to switch when there are no cameras to lay out.
+        item.setVisible(locations != null && locations.count() > 0);
+        // Show what tapping switches to, not the mode currently on screen.
+        item.setIcon(fitToScreen ? R.drawable.ic_view_stream_24 : R.drawable.ic_grid_24);
+        item.setTitle(fitToScreen ? R.string.mosaic_scrolling_grid : R.string.mosaic_fit_to_screen);
+        return super.onPrepareOptionsMenu(menu);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.mosaic_view_mode) {
+            fitToScreen = !fitToScreen;
+            AppPreferences.getInstance(this).setMosaicFitToScreen(fitToScreen);
+            invalidateOptionsMenu();
+            if (layoutModeListener != null) {
+                layoutModeListener.onFitToScreenChanged(fitToScreen);
+            }
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    @Override
     public LibVLC getSharedLibVlc() {
         return libVlc;
+    }
+
+    @Override
+    public boolean isMosaicFitToScreen() {
+        return fitToScreen;
+    }
+
+    @Override
+    public void registerLayoutModeListener(MosaicHost.LayoutModeListener listener) {
+        layoutModeListener = listener;
+    }
+
+    @Override
+    public void unregisterLayoutModeListener(MosaicHost.LayoutModeListener listener) {
+        // Identity-checked: a page pausing after its successor resumed must not
+        // clear the incoming page's registration.
+        if (layoutModeListener == listener) {
+            layoutModeListener = null;
+        }
     }
 
     @Override

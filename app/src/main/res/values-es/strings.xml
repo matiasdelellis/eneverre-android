@@ -27,6 +27,8 @@
     <string name="cameras_empty">No hay cámaras disponibles</string>
     <string name="mosaic_title">Mosaico</string>
     <string name="mosaic_open">Ver todas las cámaras</string>
+    <string name="mosaic_fit_to_screen">Ajustar la grilla a la pantalla</string>
+    <string name="mosaic_scrolling_grid">Grilla desplazable</string>
     <string name="record_clip">Grabar clip</string>
     <string name="take_snapshot">Capturar imagen</string>
     <string name="now">Ahora</string>

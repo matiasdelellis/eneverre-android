@@ -30,4 +30,15 @@ public class AppPreferences {
     public boolean isGlobalMute() {
         return prefs.getBoolean(KEY_GLOBAL_MUTE, false);
     }
+
+    /** Mosaic view mode: one screen-filling grid, or the scrolling grid (default). */
+    private static final String KEY_MOSAIC_FIT_TO_SCREEN = "mosaic_fit_to_screen";
+
+    public void setMosaicFitToScreen(boolean fitToScreen) {
+        prefs.edit().putBoolean(KEY_MOSAIC_FIT_TO_SCREEN, fitToScreen).apply();
+    }
+
+    public boolean isMosaicFitToScreen() {
+        return prefs.getBoolean(KEY_MOSAIC_FIT_TO_SCREEN, false);
+    }
 }

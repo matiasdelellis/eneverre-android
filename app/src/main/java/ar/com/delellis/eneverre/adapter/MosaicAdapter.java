@@ -48,11 +48,29 @@ public class MosaicAdapter extends RecyclerView.Adapter<MosaicAdapter.CellHolder
     private final Cameras cameras;
     private final OnCellClickListener listener;
 
+    /** Height every cell gets, in px; the owner computes it per view mode. */
+    private int cellHeight = 0;
+
     public MosaicAdapter(Context context, LibVLC libVlc, Cameras cameras, OnCellClickListener listener) {
         this.context = context;
         this.libVlc = libVlc;
         this.cameras = cameras;
         this.listener = listener;
+    }
+
+    /**
+     * Pins every cell to {@code heightPx}: cells have no intrinsic height, so the
+     * owner sizes them for the current view mode (16:9 of the column width for the
+     * scrolling grid, a share of the viewport for the grid that fits the screen)
+     * before attaching this adapter. Cells are re-bound — and their streams
+     * restarted — only when the height actually changes.
+     */
+    public void setCellHeight(int heightPx) {
+        if (cellHeight == heightPx) {
+            return;
+        }
+        cellHeight = heightPx;
+        notifyDataSetChanged();
     }
 
     @NonNull
@@ -64,6 +82,7 @@ public class MosaicAdapter extends RecyclerView.Adapter<MosaicAdapter.CellHolder
 
     @Override
     public void onBindViewHolder(@NonNull CellHolder holder, int position) {
+        holder.applyCellHeight(cellHeight);
         holder.bind(cameras.get(position));
     }
 
@@ -90,6 +109,7 @@ public class MosaicAdapter extends RecyclerView.Adapter<MosaicAdapter.CellHolder
     }
 
     class CellHolder extends RecyclerView.ViewHolder {
+        private final View videoFrame;
         private final VLCVideoLayout video;
         private final View privacyCover;
         private final ProgressBar progress;
@@ -101,18 +121,29 @@ public class MosaicAdapter extends RecyclerView.Adapter<MosaicAdapter.CellHolder
 
         CellHolder(@NonNull View itemView) {
             super(itemView);
+            videoFrame = itemView.findViewById(R.id.cell_video_frame);
             video = itemView.findViewById(R.id.cell_video);
             privacyCover = itemView.findViewById(R.id.cell_privacy_cover);
             progress = itemView.findViewById(R.id.cell_progress);
             statusIcon = itemView.findViewById(R.id.cell_status_icon);
             name = itemView.findViewById(R.id.cell_name);
 
-            itemView.findViewById(R.id.cell_video_frame).setOnClickListener(v -> {
+            videoFrame.setOnClickListener(v -> {
                 int pos = getBindingAdapterPosition();
                 if (listener != null && pos != RecyclerView.NO_POSITION) {
                     listener.onCellClick(pos);
                 }
             });
+        }
+
+        /** Gives the cell the height the current view mode asked for. */
+        void applyCellHeight(int heightPx) {
+            ViewGroup.LayoutParams cell = itemView.getLayoutParams();
+            int height = heightPx > 0 ? heightPx : ViewGroup.LayoutParams.WRAP_CONTENT;
+            if (cell.height != height) {
+                cell.height = height;
+                itemView.setLayoutParams(cell);
+            }
         }
 
         void bind(Camera camera) {

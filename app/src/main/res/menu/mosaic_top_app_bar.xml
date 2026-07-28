@@ -1,0 +1,13 @@
+<menu
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Icon and title are swapped at runtime to show the mode being switched
+         to; see MosaicActivity.onPrepareOptionsMenu. -->
+    <item
+        android:id="@+id/mosaic_view_mode"
+        android:icon="@drawable/ic_grid_24"
+        android:title="@string/mosaic_fit_to_screen"
+        app:showAsAction="always" />
+
+</menu>

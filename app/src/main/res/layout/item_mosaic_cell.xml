@@ -4,8 +4,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    tools:layout_height="180dp">
 
+    <!-- The cell's height is set per view mode by MosaicAdapter.setCellHeight
+         (16:9 of the column in the scrolling grid, a share of the viewport when
+         the grid fits the screen); the video simply fills whatever it gets. -->
     <FrameLayout
         android:id="@+id/cell_video_frame"
         android:layout_width="0dp"
@@ -14,7 +18,7 @@
         android:background="#000000"
         android:clickable="true"
         android:focusable="true"
-        app:layout_constraintDimensionRatio="16:9"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
