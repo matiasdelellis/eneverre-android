@@ -61,6 +61,16 @@ public class Locations implements Serializable {
         return null;
     }
 
+    /** Position of the named location in the on-screen order, or -1 if absent. */
+    public int indexOf(String locationName) {
+        for (int i = 0; i < locationList.size(); i++) {
+            if (locationName.equals(locationList.get(i).getName())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     public int count() {
         return locationList.size();
     }

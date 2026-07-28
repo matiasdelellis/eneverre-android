@@ -8,35 +8,31 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewpager2.widget.ViewPager2;
 
 import org.videolan.libvlc.LibVLC;
 
-import ar.com.delellis.eneverre.adapter.MosaicAdapter;
+import ar.com.delellis.eneverre.adapter.MosaicPagerAdapter;
 import ar.com.delellis.eneverre.api.ApiClient;
-import ar.com.delellis.eneverre.model.Location;
+import ar.com.delellis.eneverre.model.Locations;
 import ar.com.delellis.eneverre.player.VlcPlayer;
 
 /**
- * Live mosaic of all the cameras of a {@link Location}: a scrolling grid where
- * each visible cell streams RTSP simultaneously (see {@link MosaicAdapter}).
- * Tapping a cell opens the full single-camera {@link ViewActivity}.
+ * Hosts a {@link ViewPager2} of {@link MosaicFragment}s — one live camera grid
+ * per location — so the mosaic can be swiped from one location to the next
+ * instead of going back to the camera list to pick another one.
  *
- * Streams follow the activity's visible lifetime: the adapter (and therefore
- * every cell's player) is attached in {@link #onStart} and detached in
- * {@link #onStop}, so nothing streams while the app is in the background. The
- * shared {@link LibVLC} engine is released once in {@link #onDestroy}.
+ * The activity owns the single shared {@link LibVLC} engine every page's cells
+ * play on (see {@link MosaicFragment.SharedLibVlcProvider}) and releases it once
+ * in {@link #onDestroy}. Which streams run is up to the fragments: the pager
+ * caps every page but the current one to {@code STARTED} and each fragment
+ * streams only while resumed, so exactly one location streams at a time.
  */
-public class MosaicActivity extends AppCompatActivity implements MosaicAdapter.OnCellClickListener {
+public class MosaicActivity extends AppCompatActivity implements MosaicFragment.SharedLibVlcProvider {
 
-    private Location location;
+    private Locations locations;
     private LibVLC libVlc;
-    private RecyclerView recyclerView;
-    private GridLayoutManager layoutManager;
-    private MosaicAdapter adapter;
+    private ViewPager2 viewPager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,43 +54,47 @@ public class MosaicActivity extends AppCompatActivity implements MosaicAdapter.O
         setSupportActionBar(toolbar);
         toolbar.setNavigationOnClickListener(v -> finish());
 
-        location = (Location) getIntent().getSerializableExtra(CamerasActivity.LOCATION_CAMERAS_DATA);
+        Intent intent = getIntent();
+        locations = (Locations) intent.getSerializableExtra(CamerasActivity.ALL_LOCATIONS_DATA);
+        int selected = intent.getIntExtra(CamerasActivity.SELECTED_LOCATION_DATA, 0);
 
-        recyclerView = findViewById(R.id.mosaic_list);
+        viewPager = findViewById(R.id.mosaic_pager);
         TextView emptyView = findViewById(R.id.mosaic_empty);
 
-        int cameraCount = (location == null) ? 0 : location.getCameras().count();
-        if (cameraCount == 0) {
+        if (locations == null || locations.count() == 0) {
             emptyView.setVisibility(View.VISIBLE);
-            recyclerView.setVisibility(View.GONE);
+            viewPager.setVisibility(View.GONE);
             return;
         }
 
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle(location.getName());
-        }
-
-        layoutManager = new GridLayoutManager(this, spanCountFor(cameraCount));
-        // Don't prefetch offscreen cells: prefetching would attach (and start
-        // streaming) cells before they are visible, defeating the on-screen cap.
-        layoutManager.setItemPrefetchEnabled(false);
-        recyclerView.setLayoutManager(layoutManager);
-
         libVlc = VlcPlayer.newLibVlc(this);
-        adapter = new MosaicAdapter(this, libVlc, location.getCameras(), this);
 
-        // Reserve room below the last row for the gesture/navigation bar (the app
-        // draws edge-to-edge on Android 15), matching CamerasActivity.
-        ViewCompat.setOnApplyWindowInsetsListener(recyclerView, (v, insets) -> {
-            int bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
-            v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), bottom);
-            return insets;
+        viewPager.setAdapter(new MosaicPagerAdapter(this, locations));
+        viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+            @Override
+            public void onPageSelected(int position) {
+                super.onPageSelected(position);
+                updateTitle(position);
+            }
         });
+
+        if (selected > 0 && selected < locations.count()) {
+            viewPager.setCurrentItem(selected, false);
+        }
+        // onPageSelected is not guaranteed to fire for the initial page.
+        updateTitle(viewPager.getCurrentItem());
 
         // Hide the toolbar in landscape so the grid uses the full screen, applied
         // now too (onConfigurationChanged only fires on a later rotation), matching
         // ViewActivity.
         updateToolbarForOrientation(getResources().getConfiguration().orientation);
+    }
+
+    /** Shows the paged location's name. */
+    private void updateTitle(int position) {
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setTitle(locations.get(position).getName());
+        }
     }
 
     /** Hides the toolbar in landscape to give the grid the whole screen. */
@@ -104,29 +104,15 @@ public class MosaicActivity extends AppCompatActivity implements MosaicAdapter.O
     }
 
     @Override
-    protected void onStart() {
-        super.onStart();
-        // Attaching the adapter starts the visible cells' streams; nothing runs
-        // until the activity is actually on screen.
-        if (adapter != null && recyclerView.getAdapter() == null) {
-            recyclerView.setAdapter(adapter);
-        }
-    }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
-        // Detaching every cell (via setAdapter(null)) stops all streams while the
-        // activity is not visible, so no RTSP session lingers in the background.
-        if (recyclerView != null) {
-            recyclerView.setAdapter(null);
-        }
+    public LibVLC getSharedLibVlc() {
+        return libVlc;
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Cells were already torn down in onStop; free the shared engine last.
+        // Every page's cells were already torn down when it paused; free the
+        // shared engine last.
         if (libVlc != null) {
             libVlc.release();
             libVlc = null;
@@ -136,33 +122,7 @@ public class MosaicActivity extends AppCompatActivity implements MosaicAdapter.O
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        if (layoutManager != null && location != null) {
-            layoutManager.setSpanCount(spanCountFor(location.getCameras().count()));
-        }
+        // The grids re-lay out themselves (MosaicFragment.onConfigurationChanged).
         updateToolbarForOrientation(newConfig.orientation);
-    }
-
-    /**
-     * Grid columns for the given camera count and orientation: portrait stacks
-     * every camera full-width in a single column; landscape prefers a 2x2 quad
-     * (two columns) for up to four cameras and goes to three columns beyond that.
-     */
-    private int spanCountFor(int cameraCount) {
-        boolean landscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
-        if (!landscape) {
-            return 1;
-        }
-        if (cameraCount <= 1) {
-            return 1;
-        }
-        return cameraCount < 5 ? 2 : 3;
-    }
-
-    @Override
-    public void onCellClick(int position) {
-        Intent liveIntent = new Intent(this, ViewActivity.class);
-        liveIntent.putExtra(CamerasActivity.LOCATION_CAMERAS_DATA, location);
-        liveIntent.putExtra(CamerasActivity.SELECTED_CAMERA_DATA, position);
-        startActivity(liveIntent);
     }
 }

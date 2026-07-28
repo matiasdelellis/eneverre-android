@@ -29,13 +29,10 @@
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/mosaic_list"
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/mosaic_pager"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:clipToPadding="false"
-            tools:itemCount="4"
-            tools:listitem="@layout/item_mosaic_cell" />
+            android:layout_height="match_parent" />
 
         <TextView
             android:id="@+id/mosaic_empty"

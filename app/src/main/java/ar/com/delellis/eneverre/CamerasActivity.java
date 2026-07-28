@@ -45,6 +45,10 @@ public class CamerasActivity extends AppCompatActivity
     public static final String RAW_CAMERAS_LIST_DATA = "RAW_CAMERA_LIST";
     public static final String LOCATION_CAMERAS_DATA = "LOCATION_CAMERAS";
 
+    /** Every location plus the one to open first: the mosaic pages through them. */
+    public static final String ALL_LOCATIONS_DATA = "ALL_LOCATIONS";
+    public static final String SELECTED_LOCATION_DATA = "SELECTED_LOCATION";
+
     public static final String SELECTED_CAMERA_DATA = "SELECTED_CAMERA";
 
     /** A device user code to confirm and authorize, delivered from a link. */
@@ -250,8 +254,10 @@ public class CamerasActivity extends AppCompatActivity
 
     @Override
     public void onMosaicClick(Location location) {
+        // The mosaic pages through every location, starting on the tapped one.
         Intent mosaicIntent = new Intent(CamerasActivity.this, MosaicActivity.class);
-        mosaicIntent.putExtra(LOCATION_CAMERAS_DATA, location);
+        mosaicIntent.putExtra(ALL_LOCATIONS_DATA, locations);
+        mosaicIntent.putExtra(SELECTED_LOCATION_DATA, Math.max(0, locations.indexOf(location.getName())));
         startActivity(mosaicIntent);
     }
 }
