@@ -12,12 +12,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.viewpager2.widget.ViewPager2;
 
-import org.videolan.libvlc.LibVLC;
-
 import ar.com.delellis.eneverre.adapter.MosaicPagerAdapter;
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.model.Locations;
-import ar.com.delellis.eneverre.player.VlcPlayer;
 import ar.com.delellis.eneverre.util.AppPreferences;
 
 /**
@@ -25,11 +22,9 @@ import ar.com.delellis.eneverre.util.AppPreferences;
  * per location — so the mosaic can be swiped from one location to the next
  * instead of going back to the camera list to pick another one.
  *
- * The activity owns the single shared {@link LibVLC} engine every page's cells
- * play on (see {@link MosaicHost}) and releases it once in
- * {@link #onDestroy}. Which streams run is up to the fragments: the pager caps
- * every page but the current one to {@code STARTED} and each fragment streams
- * only while resumed, so exactly one location streams at a time.
+ * Which streams run is up to the fragments: the pager caps every page but the
+ * current one to {@code STARTED} and each fragment streams only while resumed,
+ * so exactly one location streams at a time.
  *
  * The toolbar also switches every page's view mode between the scrolling grid and
  * one that fits the whole location on screen. The choice is remembered in
@@ -40,7 +35,6 @@ import ar.com.delellis.eneverre.util.AppPreferences;
 public class MosaicActivity extends AppCompatActivity implements MosaicHost {
 
     private Locations locations;
-    private LibVLC libVlc;
     private ViewPager2 viewPager;
     private boolean fitToScreen;
     private MosaicHost.LayoutModeListener layoutModeListener;
@@ -79,7 +73,6 @@ public class MosaicActivity extends AppCompatActivity implements MosaicHost {
         }
 
         fitToScreen = AppPreferences.getInstance(this).isMosaicFitToScreen();
-        libVlc = VlcPlayer.newLibVlc(this);
 
         viewPager.setAdapter(new MosaicPagerAdapter(this, locations));
         viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
@@ -147,11 +140,6 @@ public class MosaicActivity extends AppCompatActivity implements MosaicHost {
     }
 
     @Override
-    public LibVLC getSharedLibVlc() {
-        return libVlc;
-    }
-
-    @Override
     public boolean isMosaicFitToScreen() {
         return fitToScreen;
     }
@@ -167,17 +155,6 @@ public class MosaicActivity extends AppCompatActivity implements MosaicHost {
         // clear the incoming page's registration.
         if (layoutModeListener == listener) {
             layoutModeListener = null;
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        // Every page's cells were already torn down when it paused; free the
-        // shared engine last.
-        if (libVlc != null) {
-            libVlc.release();
-            libVlc = null;
         }
     }
 

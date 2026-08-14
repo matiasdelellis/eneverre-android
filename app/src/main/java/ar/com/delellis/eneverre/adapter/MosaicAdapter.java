@@ -16,25 +16,21 @@ import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
-import org.videolan.libvlc.LibVLC;
-import org.videolan.libvlc.MediaPlayer;
-import org.videolan.libvlc.util.VLCVideoLayout;
-
 import ar.com.delellis.eneverre.R;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.model.Cameras;
-import ar.com.delellis.eneverre.player.VlcPlayer;
+import ar.com.delellis.eneverre.player.RtspPlayerView;
 
 /**
- * Backs the live camera mosaic. Every cell runs its own {@link VlcPlayer} over a
- * single shared {@link LibVLC} (one native engine for the whole grid). Streams
- * are tied to view attachment: a cell starts playing when it scrolls on screen
+ * Backs the live camera mosaic. Every cell is its own {@link RtspPlayerView},
+ * i.e. an independent RTSP session and decoder. Streams are tied to view
+ * attachment: a cell starts playing when it scrolls on screen
  * ({@link #onViewAttachedToWindow}) and is torn down when it scrolls off
  * ({@link #onViewDetachedFromWindow}), so only the visible cells ever stream and
  * the count of concurrent RTSP sessions stays bounded by what fits on screen.
  *
- * Every cell is muted: several live audio tracks at once would be unusable, and
- * audio belongs to the full single-camera view opened on tap.
+ * No cell pulls audio at all: several live audio tracks at once would be
+ * unusable, and audio belongs to the full single-camera view opened on tap.
  */
 public class MosaicAdapter extends RecyclerView.Adapter<MosaicAdapter.CellHolder> {
 
@@ -44,16 +40,14 @@ public class MosaicAdapter extends RecyclerView.Adapter<MosaicAdapter.CellHolder
     }
 
     private final Context context;
-    private final LibVLC libVlc;
     private final Cameras cameras;
     private final OnCellClickListener listener;
 
     /** Height every cell gets, in px; the owner computes it per view mode. */
     private int cellHeight = 0;
 
-    public MosaicAdapter(Context context, LibVLC libVlc, Cameras cameras, OnCellClickListener listener) {
+    public MosaicAdapter(Context context, Cameras cameras, OnCellClickListener listener) {
         this.context = context;
-        this.libVlc = libVlc;
         this.cameras = cameras;
         this.listener = listener;
     }
@@ -110,14 +104,13 @@ public class MosaicAdapter extends RecyclerView.Adapter<MosaicAdapter.CellHolder
 
     class CellHolder extends RecyclerView.ViewHolder {
         private final View videoFrame;
-        private final VLCVideoLayout video;
+        private final RtspPlayerView video;
         private final View privacyCover;
         private final ProgressBar progress;
         private final ImageView statusIcon;
         private final TextView name;
 
         private Camera camera;
-        private VlcPlayer player;
 
         CellHolder(@NonNull View itemView) {
             super(itemView);
@@ -127,6 +120,25 @@ public class MosaicAdapter extends RecyclerView.Adapter<MosaicAdapter.CellHolder
             progress = itemView.findViewById(R.id.cell_progress);
             statusIcon = itemView.findViewById(R.id.cell_status_icon);
             name = itemView.findViewById(R.id.cell_name);
+
+            // Video only: the full single-camera view owns audio (see class javadoc).
+            video.setAudioEnabled(false);
+            video.setListener(new RtspPlayerView.Listener() {
+                @Override
+                public void onConnecting() {
+                    progress.setVisibility(VISIBLE);
+                }
+
+                @Override
+                public void onPlaying() {
+                    progress.setVisibility(GONE);
+                }
+
+                @Override
+                public void onError(boolean unauthorized) {
+                    showError();
+                }
+            });
 
             videoFrame.setOnClickListener(v -> {
                 int pos = getBindingAdapterPosition();
@@ -153,7 +165,7 @@ public class MosaicAdapter extends RecyclerView.Adapter<MosaicAdapter.CellHolder
 
         /** Starts (or restarts) this cell's stream, unless the camera is in privacy mode. */
         void start() {
-            if (camera == null || player != null) {
+            if (camera == null || video.isPlaying()) {
                 return;
             }
             if (camera.getPrivacy()) {
@@ -165,27 +177,11 @@ public class MosaicAdapter extends RecyclerView.Adapter<MosaicAdapter.CellHolder
             statusIcon.setVisibility(GONE);
             progress.setVisibility(VISIBLE);
 
-            player = new VlcPlayer(libVlc);
-            player.setEventListener(event -> {
-                if (event.type == MediaPlayer.Event.Buffering && event.getBuffering() == 100f) {
-                    progress.setVisibility(GONE);
-                } else if (event.type == MediaPlayer.Event.EncounteredError) {
-                    showError();
-                }
-            });
-            player.attachView(video);
-            // Muted: the full single-camera view owns audio (see class javadoc).
-            player.mute(true);
-            player.playUri(Uri.parse(camera.getRtsp()));
+            video.playUri(Uri.parse(camera.getRtsp()));
         }
 
         void stop() {
-            if (player != null) {
-                player.stop();
-                player.detachViews();
-                player.release();
-                player = null;
-            }
+            video.stopPlayback();
             progress.setVisibility(GONE);
         }
 

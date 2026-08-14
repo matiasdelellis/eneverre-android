@@ -1,18 +1,10 @@
 package ar.com.delellis.eneverre;
 
-import org.videolan.libvlc.LibVLC;
-
 /**
  * What a {@link MosaicFragment} needs from whoever pages it ({@link MosaicActivity}):
- * the shared playback engine and the view mode its toolbar switches.
+ * the view mode its toolbar switches.
  */
 public interface MosaicHost {
-
-    /**
-     * The single shared {@link LibVLC} every page's grid runs on (one native
-     * engine for the whole activity, not one per location).
-     */
-    LibVLC getSharedLibVlc();
 
     /** Current view mode: fit the whole grid on screen, or let it scroll. */
     boolean isMosaicFitToScreen();

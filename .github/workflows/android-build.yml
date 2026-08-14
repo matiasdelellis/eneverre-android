@@ -27,7 +27,8 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          # AGP 9 / Gradle 9 need a modern JDK to run.
+          java-version: 21
 
       - name: Determine release tag
         id: release_info

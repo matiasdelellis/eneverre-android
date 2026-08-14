@@ -22,11 +22,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Thin ExoPlayer (Media3) wrapper for <b>recording playback</b>, mirroring the
- * surface of {@link VlcPlayer} so {@code PlaybackFragment} can swap one for the
- * other. Live RTSP keeps using {@link VlcPlayer} (better codec handling).
+ * Thin ExoPlayer (Media3) wrapper for <b>recording playback</b>. Live RTSP is
+ * not played through here but by {@link RtspPlayerView}.
  *
- * <p>Unlike VLC — which plays a single fixed window and must be restarted at
+ * <p>Unlike VLC — the player this replaced, which plays a single fixed window
+ * and must be restarted at
  * each boundary (the source of the playback gaps) — this feeds ExoPlayer a
  * <b>playlist</b> of consecutive segments. ExoPlayer pre-buffers the next item
  * and transitions into it without tearing down the pipeline, so consecutive

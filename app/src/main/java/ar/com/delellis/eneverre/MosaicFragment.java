@@ -16,8 +16,6 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import org.videolan.libvlc.LibVLC;
-
 import ar.com.delellis.eneverre.adapter.MosaicAdapter;
 import ar.com.delellis.eneverre.model.Location;
 
@@ -105,13 +103,7 @@ public class MosaicFragment extends Fragment
             }
         });
 
-        LibVLC libVlc = host().getSharedLibVlc();
-        if (libVlc == null) {
-            // Host is finishing (e.g. bouncing through the splash after process
-            // death) and never created the engine; leave the grid empty.
-            return;
-        }
-        adapter = new MosaicAdapter(requireContext(), libVlc, location.getCameras(), this);
+        adapter = new MosaicAdapter(requireContext(), location.getCameras(), this);
     }
 
     @Override

@@ -30,7 +30,6 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
-import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -41,15 +40,12 @@ import com.google.android.material.color.MaterialColors;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.slider.Slider;
 
-import org.videolan.libvlc.MediaPlayer;
-import org.videolan.libvlc.util.VLCVideoLayout;
-
 import java.util.List;
 
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.Camera;
-import ar.com.delellis.eneverre.player.VlcPlayer;
+import ar.com.delellis.eneverre.player.RtspPlayerView;
 import ar.com.delellis.eneverre.talk.TalkClient;
 import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
@@ -74,8 +70,10 @@ public class LiveViewFragment extends Fragment {
     /** Minimum accumulated degrees before an in-drag command is worth sending. */
     private static final float PTZ_MIN_SEND_DEGREES = 1f;
 
-    private VlcPlayer vlcPlayer = null;
-    private VLCVideoLayout vlcVideoLayout = null;
+    /** The live stream: player and video surface in one view (see RtspPlayerView). */
+    private RtspPlayerView livePlayer = null;
+    /** Frame around the player, scaled/translated by the zoom-and-pan gestures. */
+    private View videoFrame = null;
     private View fragmentView;
 
     private VideoTouchListener videoTouchListener;
@@ -241,7 +239,10 @@ public class LiveViewFragment extends Fragment {
         view.findViewById(R.id.exit_privacy_button).setVisibility(currentCamera.getPrivacy() ? VISIBLE : GONE);
         view.findViewById(R.id.loading_progress).setVisibility(currentCamera.getPrivacy() ? GONE : VISIBLE);
 
-        vlcVideoLayout = view.findViewById(R.id.vlc_video_Layout);
+        livePlayer = view.findViewById(R.id.live_video);
+        livePlayer.setListener(livePlayerListener);
+
+        videoFrame = view.findViewById(R.id.live_video_frame);
         videoTouchListener = new VideoTouchListener();
         videoTouchListener.setOnPtzPanListener(new VideoTouchListener.OnPtzPanListener() {
             @Override
@@ -254,7 +255,7 @@ public class LiveViewFragment extends Fragment {
                 sendPtzDrag(true);
             }
         });
-        vlcVideoLayout.setOnTouchListener(videoTouchListener);
+        videoFrame.setOnTouchListener(videoTouchListener);
 
         // PTZ controls stay on screen even when the camera lacks PTZ support, just
         // disabled, so the live view doesn't look empty.
@@ -272,7 +273,6 @@ public class LiveViewFragment extends Fragment {
         view.findViewById(R.id.exit_privacy_button).setOnClickListener(v -> {
             togglePrivacy(false);
 
-            prepareLive();
             setMuteLive(prefs.isGlobalMute());
             startLive();
         });
@@ -303,10 +303,10 @@ public class LiveViewFragment extends Fragment {
             }
         });
 
-        // Camera volume drives the live VLC player directly (0–100).
+        // Camera volume drives the live player directly (0–100).
         ((Slider) view.findViewById(R.id.camera_volume)).addOnChangeListener((slider, value, fromUser) -> {
-            if (vlcPlayer != null) {
-                vlcPlayer.setVolume((int) value);
+            if (livePlayer != null) {
+                livePlayer.setVolumePercent((int) value);
             }
         });
 
@@ -363,8 +363,7 @@ public class LiveViewFragment extends Fragment {
             // no toast — this is a resume, not a user toggle.
             applyPrivacyLayout(true);
         } else {
-            boolean alreadyLive = vlcPlayer != null;
-            prepareLive();
+            boolean alreadyLive = livePlayer.isPlaying();
             setMuteLive(prefs.isGlobalMute());
             // Returning from Picture-in-Picture the player is still streaming;
             // re-issuing playUri would tear down and reconnect the RTSP session.
@@ -400,6 +399,9 @@ public class LiveViewFragment extends Fragment {
         // is the only place that guarantees the native player is released.
         exitTalkMode();
         stopLive();
+        // The player is part of the view being destroyed: don't keep it around.
+        livePlayer = null;
+        videoFrame = null;
         super.onDestroyView();
     }
 
@@ -533,7 +535,7 @@ public class LiveViewFragment extends Fragment {
      * the digital pan while zoomed.
      */
     private void accumulatePtzDrag(float dxPixels, float dyPixels) {
-        int width = vlcVideoLayout.getWidth();
+        int width = videoFrame.getWidth();
         Camera.PtzMetadata metadata = currentCamera.getPtzMetadata();
         if (width <= 0 || metadata == null || metadata.getFovH() <= 0f)
             return;
@@ -572,8 +574,8 @@ public class LiveViewFragment extends Fragment {
     }
 
     private void takeSnapshot() {
-        SurfaceView surfaceView = fragmentView.findViewById(org.videolan.R.id.surface_video);
-        Snapshot.getSurfaceBitmap(surfaceView, new Snapshot.PixelCopyListener() {
+        // The player view *is* the video surface, so PixelCopy reads it directly.
+        Snapshot.getSurfaceBitmap(livePlayer, new Snapshot.PixelCopyListener() {
             @Override
             public void onSurfaceBitmapReady(Bitmap bitmap) {
                 if (viewGone()) {
@@ -592,40 +594,51 @@ public class LiveViewFragment extends Fragment {
         });
     }
 
-    public void prepareLive() {
-        if (vlcPlayer != null)
-            return;
-
-        vlcPlayer = new VlcPlayer(requireContext());
-        vlcPlayer.setEventListener(event -> {
-            if (event.type == MediaPlayer.Event.Buffering) {
-                if (event.getBuffering() == 100f) {
-                    fragmentView.findViewById(R.id.loading_progress).setVisibility(GONE);
-                    // A clean connect means the current URL works; allow a fresh
-                    // refresh attempt if it later drops.
-                    rtspRefreshAttempted = false;
-                } else {
-                    fragmentView.findViewById(R.id.loading_progress).setVisibility(VISIBLE);
-                }
-            } else if (event.type == MediaPlayer.Event.EncounteredError) {
-                fragmentView.findViewById(R.id.loading_progress).setVisibility(GONE);
-                if (!rtspRefreshAttempted) {
-                    // The RTSP credentials rotate; refetch the camera list once for a
-                    // fresh URL and retry before giving up.
-                    rtspRefreshAttempted = true;
-                    refreshRtspAndRetry();
-                } else {
-                    fragmentView.findViewById(R.id.reconnect_button).setVisibility(VISIBLE);
-                }
+    /** Spinner while connecting, error recovery once a stream drops. */
+    private final RtspPlayerView.Listener livePlayerListener = new RtspPlayerView.Listener() {
+        @Override
+        public void onConnecting() {
+            if (viewGone()) {
+                return;
             }
-        });
+            fragmentView.findViewById(R.id.loading_progress).setVisibility(VISIBLE);
+        }
 
-        vlcPlayer.attachView(vlcVideoLayout);
-    }
+        @Override
+        public void onPlaying() {
+            if (viewGone()) {
+                return;
+            }
+            fragmentView.findViewById(R.id.loading_progress).setVisibility(GONE);
+            // A clean connect means the current URL works; allow a fresh
+            // refresh attempt if it later drops.
+            rtspRefreshAttempted = false;
+        }
+
+        @Override
+        public void onError(boolean unauthorized) {
+            if (viewGone()) {
+                return;
+            }
+            fragmentView.findViewById(R.id.loading_progress).setVisibility(GONE);
+            if (!rtspRefreshAttempted) {
+                // The RTSP credentials rotate, so a rejected (or dropped) stream
+                // may just mean they rolled over: refetch the camera list once
+                // for a fresh URL and retry before giving up.
+                rtspRefreshAttempted = true;
+                refreshRtspAndRetry();
+            } else {
+                fragmentView.findViewById(R.id.reconnect_button).setVisibility(VISIBLE);
+            }
+        }
+    };
 
     private void startLive() {
+        if (livePlayer == null) {
+            return;
+        }
         String videoUrl = currentCamera.getRtsp();
-        vlcPlayer.playUri(Uri.parse(videoUrl));
+        livePlayer.playUri(Uri.parse(videoUrl));
     }
 
     /**
@@ -638,7 +651,7 @@ public class LiveViewFragment extends Fragment {
         apiService.cameras().enqueue(new ApiCallback<List<Camera>>(requireContext()) {
             @Override
             public void onSuccess(List<Camera> cameras) {
-                if (!isAdded() || vlcPlayer == null) {
+                if (!isAdded() || livePlayer == null) {
                     return;
                 }
                 if (cameras != null) {
@@ -665,17 +678,14 @@ public class LiveViewFragment extends Fragment {
     }
 
     public void stopLive() {
-        if (vlcPlayer != null) {
-            vlcPlayer.stop();
-            vlcPlayer.detachViews();
-            vlcPlayer.release();
-            vlcPlayer = null;
+        if (livePlayer != null) {
+            livePlayer.stopPlayback();
         }
     }
 
     public void setMuteLive(boolean muted) {
-        if (vlcPlayer != null) {
-            vlcPlayer.mute(muted);
+        if (livePlayer != null) {
+            livePlayer.mute(muted);
         }
     }
 
@@ -716,8 +726,8 @@ public class LiveViewFragment extends Fragment {
         // The push-to-talk button stays disabled until the backchannel is ready.
         // Align the live player with the current camera-volume slider up front.
         fragmentView.findViewById(R.id.push_to_talk_button).setEnabled(false);
-        if (vlcPlayer != null) {
-            vlcPlayer.setVolume((int) ((Slider) fragmentView.findViewById(R.id.camera_volume)).getValue());
+        if (livePlayer != null) {
+            livePlayer.setVolumePercent((int) ((Slider) fragmentView.findViewById(R.id.camera_volume)).getValue());
         }
 
         showTalkToast(R.string.talk_connecting, LENGTH_SHORT);
@@ -852,8 +862,7 @@ public class LiveViewFragment extends Fragment {
         int color = ContextCompat.getColor(fab.getContext(), R.color.record_red);
         fab.setImageTintList(ColorStateList.valueOf(color));
 
-        SurfaceView surfaceView = fragmentView.findViewById(org.videolan.R.id.surface_video);
-        Snapshot.getSurfaceBitmap(surfaceView, new Snapshot.PixelCopyListener() {
+        Snapshot.getSurfaceBitmap(livePlayer, new Snapshot.PixelCopyListener() {
             @Override
             public void onSurfaceBitmapReady(Bitmap bitmap) {
                 startBitmap = bitmap;

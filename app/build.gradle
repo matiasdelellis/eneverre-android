@@ -35,7 +35,10 @@ android {
 
     namespace 'ar.com.delellis.eneverre'
 
-    compileSdk 35
+    // 37 is not a choice: rtsp-client-android's AAR declares minCompileSdk=37
+    // (and media3 1.11 declares 36). targetSdk stays at 35 — bumping it opts
+    // into new runtime behaviour, which is a separate decision.
+    compileSdk 37
 
     defaultConfig {
         applicationId "ar.com.delellis.eneverre"
@@ -100,18 +103,6 @@ android {
         }
     }
 
-    // Name the built APKs after the app, version and ABI so the published /
-    // released files are self-describing — e.g. Eneverre-0.8.0-arm64-v8a.apk
-    // (debug builds carry the -debug versionName suffix). The ABI substrings are
-    // kept intact so publish-update.yml's *arm64*/*armeabi*/*universal* globs
-    // still match.
-    applicationVariants.all { variant ->
-        variant.outputs.all { output ->
-            def abi = output.getFilter(com.android.build.OutputFile.ABI) ?: "universal"
-            output.outputFileName = "Eneverre-${variant.versionName}-${abi}.apk"
-        }
-    }
-
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
@@ -123,8 +114,30 @@ android {
     }
 }
 
+// Name the built APKs after the app, version and ABI so the published /
+// released files are self-describing — e.g. Eneverre-0.8.0-arm64-v8a.apk
+// (debug builds carry the -debug versionName suffix). The ABI substrings are
+// kept intact so publish-update.yml's *arm64*/*armeabi*/*universal* globs
+// still match.
+//
+// This is the AGP 9 variant API: the old `applicationVariants.all { }` block
+// was removed with the legacy Variant API.
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.outputs.each { output ->
+            def abiFilter = output.filters.find {
+                it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI
+            }
+            def abi = abiFilter != null ? abiFilter.identifier : "universal"
+            output.outputFileName.set(output.versionName.map { name ->
+                "Eneverre-${name}-${abi}.apk".toString()
+            })
+        }
+    }
+}
+
 dependencies {
-    implementation libs.libvlc
+    implementation libs.rtsp.client
     implementation libs.media3.exoplayer
     implementation libs.media3.ui
     implementation libs.retrofit

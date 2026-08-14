@@ -49,10 +49,23 @@
             android:layout_width="match_parent"
             android:layout_height="250dp">
 
-            <org.videolan.libvlc.util.VLCVideoLayout
-                android:id="@+id/vlc_video_Layout"
+            <!-- The zoom/pan gestures scale and translate this frame, not the
+                 player surface itself, so the overlays below (privacy cover,
+                 spinner, buttons) stay put — and so a zoomed surface is
+                 transformed the same way it was under libVLC. -->
+            <FrameLayout
+                android:id="@+id/live_video_frame"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="match_parent"
+                android:background="#000000">
+
+                <ar.com.delellis.eneverre.player.RtspPlayerView
+                    android:id="@+id/live_video"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="center" />
+
+            </FrameLayout>
 
             <View
                 android:id="@+id/privacy_cover"

@@ -23,10 +23,11 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
-        <org.videolan.libvlc.util.VLCVideoLayout
+        <ar.com.delellis.eneverre.player.RtspPlayerView
             android:id="@+id/cell_video"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:layout_gravity="center" />
 
         <!-- Shown for cameras in privacy mode instead of a stream. -->
         <View
