@@ -746,9 +746,17 @@ public class LiveViewFragment extends Fragment {
 
         showTalkToast(R.string.talk_connecting, LENGTH_SHORT);
 
-        // Prefer AAC (16 kHz wideband) when the camera advertises it; else PCM/G.711.
-        boolean useAac = currentCamera.supportsTalkAac();
-        talkClient = new TalkClient(talkUrl, authHeader, useAac, new TalkClient.Listener() {
+        // Pick the best codec the camera's backchannel actually accepts
+        // (talk_codecs): raw Opus (RFC 7587 passthrough, fullband, ~5 ms codec
+        // delay) when offered and this device has an encoder, else AAC (16 kHz
+        // wideband), else PCM/G.711 — always supported.
+        TalkClient.Codec codec = TalkClient.Codec.PCM;
+        if (currentCamera.supportsTalkOpus() && TalkClient.hasOpusEncoder()) {
+            codec = TalkClient.Codec.OPUS;
+        } else if (currentCamera.supportsTalkAac()) {
+            codec = TalkClient.Codec.AAC;
+        }
+        talkClient = new TalkClient(talkUrl, authHeader, codec, new TalkClient.Listener() {
             @Override
             public void onReady() {
                 if (!isAdded()) return;

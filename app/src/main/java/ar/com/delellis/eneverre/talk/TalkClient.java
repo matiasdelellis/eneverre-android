@@ -4,6 +4,7 @@ import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
+import android.media.MediaCodecList;
 import android.media.MediaFormat;
 import android.media.MediaRecorder;
 
@@ -27,26 +28,30 @@ import okio.ByteString;
  * This socket is send-only — the camera's own audio is heard through the normal
  * live stream.
  *
- * <p>Two codecs, negotiated in the handshake:
+ * <p>Three codecs, negotiated in the handshake:
  * <ul>
  *   <li><b>PCM/G.711</b> (default) — captures mono S16LE PCM and sends the bytes
  *       verbatim; the server resamples to 8 kHz and encodes G.711 for the camera.
  *       Every backchannel camera supports this.
- *   <li><b>AAC</b> ({@code aac=true}) — encodes AAC-LC on-device with
- *       {@link MediaCodec} and sends one raw access unit per message; the server
- *       forwards them untranscoded for 16 kHz wideband audio. Only use this when
- *       the camera advertises AAC (see {@code Camera.supportsTalkAac()}), otherwise
- *       the server closes the socket with an RTSP error.
+ *   <li><b>AAC</b> — encodes AAC-LC on-device with {@link MediaCodec} and sends
+ *       one raw access unit per message; the server forwards them untranscoded
+ *       for 16 kHz wideband audio.
+ *   <li><b>Opus</b> — encodes Opus on-device with {@link MediaCodec} and sends
+ *       one raw 20 ms packet per message; the server forwards them untranscoded
+ *       (RFC 7587 passthrough, 48 kHz RTP clock).
  * </ul>
+ * Only use AAC/Opus when the camera advertises it (see
+ * {@code Camera.supportsTalkAac()} / {@code Camera.supportsTalkOpus()}),
+ * otherwise the server closes the socket with an RTSP error.
  *
  * <p>The session and the actual transmission are decoupled: {@link #start()} opens
  * the socket and reports {@link Listener#onReady()} once the backchannel is live,
  * but the microphone is not captured until {@link #setTransmitting(boolean)} is
  * toggled by the push-to-talk button. This lets the UI initialize the link first
- * and only hold the mic while the user is actually speaking. On the AAC path the
- * encoder still comes up at "ready" and streams <em>silence</em> until then, to
- * warm the camera's backchannel so the first word is not clipped (the G.711 path
- * relies on the server for that).
+ * and only hold the mic while the user is actually speaking. On the AAC/Opus
+ * paths the encoder still comes up at "ready" and streams <em>silence</em> until
+ * then, to warm the camera's backchannel so the first word is not clipped (the
+ * G.711 path relies on the server for that).
  *
  * <p>Authentication uses the same Bearer access token as the REST API, set on the
  * upgrade request's {@code Authorization} header. One active session per camera:
@@ -69,17 +74,50 @@ public class TalkClient {
     /** {@link Listener#onEnd} reason when the microphone can't be captured. */
     public static final String REASON_MIC_UNAVAILABLE = "mic-unavailable";
 
+    /**
+     * Whether this device has a {@link MediaCodec} Opus encoder. Only Android 10+
+     * ships one; on older devices negotiate AAC or G.711 instead, otherwise the
+     * session would open and then die with "Opus encoder unavailable".
+     */
+    public static boolean hasOpusEncoder() {
+        for (MediaCodecInfo info : new MediaCodecList(MediaCodecList.ALL_CODECS).getCodecInfos()) {
+            if (!info.isEncoder()) {
+                continue;
+            }
+            for (String type : info.getSupportedTypes()) {
+                if (MediaFormat.MIMETYPE_AUDIO_OPUS.equals(type)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Negotiated uplink codec, fixed for the session. */
+    public enum Codec {
+        /** Raw S16LE PCM; the server resamples to 8 kHz and encodes G.711 (always works). */
+        PCM,
+        /** On-device AAC-LC; the server forwards raw access units untranscoded (16 kHz wideband). */
+        AAC,
+        /** On-device Opus; the server forwards raw 20 ms packets untranscoded (RFC 7587). */
+        OPUS
+    }
+
     private static final int SAMPLE_RATE = 16000;   // low rate → less uplink; see doc "Bandwidth"
-    private static final int AAC_BIT_RATE = 32000;  // plenty for 16 kHz mono voice
+    private static final int ENCODED_BIT_RATE = 32000;  // plenty for 16 kHz mono voice
     /** AAC-LC frames are 1024 samples; used to size and pace the warm-up silence. */
     private static final int AAC_FRAME_SAMPLES = 1024;
     private static final long AAC_FRAME_MS = 1000L * AAC_FRAME_SAMPLES / SAMPLE_RATE; // ~64 ms
+    /** Opus frames must be 20 ms (the server's RTP clock advances 960 samples per
+     * packet at 48 kHz); 320 samples per frame at the capture rate. */
+    private static final int OPUS_FRAME_SAMPLES = 320;
+    private static final long OPUS_FRAME_MS = 20;
 
     private final String talkUrl;              // ws(s)://<host>/api/camera/<id>/talk
     private final String authorizationHeader;  // "Bearer <accessToken>"
-    // When true, encode AAC-LC on-device and negotiate codec=aac; otherwise send
-    // raw PCM and let the server transcode to G.711. Fixed for the session.
-    private final boolean aac;
+    // PCM sends raw PCM and lets the server transcode to G.711; AAC/OPUS encode
+    // on-device for the server to forward untranscoded. Fixed for the session.
+    private final Codec codec;
     private final Listener listener;
 
     private final OkHttpClient client = new OkHttpClient.Builder()
@@ -92,15 +130,15 @@ public class TalkClient {
      * otherwise report the same session end two or three times. */
     private final AtomicBoolean ended = new AtomicBoolean(false);
     private volatile boolean transmitting;
-    /** AAC path only: true while the encoder + warm-up-silence session thread runs. */
-    private volatile boolean aacSessionRunning;
+    /** AAC/Opus paths only: true while the encoder + warm-up-silence session thread runs. */
+    private volatile boolean encodedSessionRunning;
     /** Linear gain applied to captured samples before sending; 1.0 = unity. */
     private volatile float micGain = 1.0f;
 
-    public TalkClient(String talkUrl, String authorizationHeader, boolean aac, Listener listener) {
+    public TalkClient(String talkUrl, String authorizationHeader, Codec codec, Listener listener) {
         this.talkUrl = talkUrl;
         this.authorizationHeader = authorizationHeader;
-        this.aac = aac;
+        this.codec = codec;
         this.listener = listener;
     }
 
@@ -115,12 +153,20 @@ public class TalkClient {
         ws = client.newWebSocket(request, new WebSocketListener() {
             @Override
             public void onOpen(WebSocket webSocket, Response response) {
-                // Handshake with the capture rate (and codec on the AAC path);
+                // Handshake with the capture rate (and codec on the encoded paths);
                 // capture itself waits for the PTT button.
-                if (aac) {
-                    webSocket.send("{\"sampleRate\": " + SAMPLE_RATE + ", \"codec\": \"aac\"}");
-                } else {
-                    webSocket.send("{\"sampleRate\": " + SAMPLE_RATE + "}");
+                switch (codec) {
+                    case AAC:
+                        webSocket.send("{\"sampleRate\": " + SAMPLE_RATE + ", \"codec\": \"aac\"}");
+                        break;
+                    case OPUS:
+                        // The rate is irrelevant here: Opus packets are 48 kHz
+                        // internally and the server just forwards them.
+                        webSocket.send("{\"codec\": \"opus\"}");
+                        break;
+                    default:
+                        webSocket.send("{\"sampleRate\": " + SAMPLE_RATE + "}");
+                        break;
                 }
             }
 
@@ -128,14 +174,15 @@ public class TalkClient {
             public void onMessage(WebSocket webSocket, String text) {
                 // Server signals the camera backchannel is live.
                 if (text.contains("\"ready\"")) {
-                    // The AAC path is passthrough: the server sends nothing to the
-                    // camera until we send the first access unit, so the camera's
-                    // decoder/speaker never warms up on its own and it drops the
-                    // start of the first word. Bring the encoder up now and stream
-                    // silence until the user actually talks (see doc "AAC warm-up").
-                    // The G.711 path needs none of this — the server streams its own
-                    // silence to the camera from the moment the session opens.
-                    if (aac) startAacSession();
+                    // The AAC/Opus paths are passthrough: the server sends nothing
+                    // to the camera until we send the first encoded unit, so the
+                    // camera's decoder/speaker never warms up on its own and it
+                    // drops the start of the first word. Bring the encoder up now
+                    // and stream silence until the user actually talks (see doc
+                    // "AAC warm-up"). The G.711 path needs none of this — the
+                    // server streams its own silence to the camera from the moment
+                    // the session opens.
+                    if (codec != Codec.PCM) startEncodedSession();
                     listener.onReady();
                 }
             }
@@ -181,11 +228,12 @@ public class TalkClient {
         if (on == transmitting) {
             return;
         }
-        if (aac) {
-            // The AAC session thread is already running (started on "ready"); it
-            // switches between silence and the real mic by reading this flag, so
-            // there is no per-press thread to start or stop here. Silence keeps
-            // flowing during pauses, which keeps the camera backchannel warm.
+        if (codec != Codec.PCM) {
+            // The encoded-session thread is already running (started on "ready");
+            // it switches between silence and the real mic by reading this flag,
+            // so there is no per-press thread to start or stop here. Silence
+            // keeps flowing during pauses, which keeps the camera backchannel
+            // warm.
             transmitting = on;
             return;
         }
@@ -250,53 +298,64 @@ public class TalkClient {
     }
 
     /**
-     * AAC path: brings the on-device AAC-LC encoder up as soon as the backchannel is
-     * ready and runs a single long-lived thread for the whole session, sending one
-     * raw access unit per WebSocket message; the server forwards them untranscoded
-     * to the camera's MPEG4-GENERIC track (16 kHz wideband). The encoder format
-     * (AAC-LC, mono, {@link #SAMPLE_RATE}) must match that track.
+     * AAC/Opus paths: brings the on-device encoder up as soon as the backchannel
+     * is ready and runs a single long-lived thread for the whole session, sending
+     * one encoded unit per WebSocket message; the server forwards them untranscoded
+     * (AAC-LC access units to the camera's MPEG4-GENERIC track, raw 20 ms Opus
+     * packets per RFC 7587). The AAC format (AAC-LC, mono, {@link #SAMPLE_RATE})
+     * must match the camera's track; Opus needs no rate agreement — the packets
+     * are 48 kHz internally and the server only relies on their 20 ms framing.
      *
-     * <p>Because the server relays AAC verbatim (it does not synthesize its own
-     * silence as it does on G.711), the camera only warms its decoder/speaker once
-     * we start sending. So the thread feeds the encoder <em>silence</em> whenever
-     * {@link #transmitting} is false — during the warm-up window after "ready" and
-     * during pauses between presses — and switches to the real mic while the button
-     * is held. The user's first word therefore lands on an already-live channel and
-     * is not clipped. The mic is opened only while actually transmitting.
+     * <p>Because the server relays these codecs verbatim (it does not synthesize
+     * its own silence as it does on G.711), the camera only warms its decoder/
+     * speaker once we start sending. So the thread feeds the encoder
+     * <em>silence</em> whenever {@link #transmitting} is false — during the
+     * warm-up window after "ready" and during pauses between presses — and
+     * switches to the real mic while the button is held. The user's first word
+     * therefore lands on an already-live channel and is not clipped. The mic is
+     * opened only while actually transmitting.
      */
     @SuppressWarnings("MissingPermission")
-    private void startAacSession() {
+    private void startEncodedSession() {
         final WebSocket webSocket;
         synchronized (this) {
-            if (aacSessionRunning || ws == null) {
+            if (encodedSessionRunning || ws == null) {
                 return;
             }
-            aacSessionRunning = true;   // claim the session before the slow codec setup
+            encodedSessionRunning = true;   // claim the session before the slow codec setup
             webSocket = ws;
         }
 
         final int minBuf = AudioRecord.getMinBufferSize(
                 SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
         if (minBuf <= 0) {
-            aacSessionRunning = false;
+            encodedSessionRunning = false;
             deliverEnd(REASON_MIC_UNAVAILABLE);
             stop();
             return;
         }
 
-        MediaFormat format = MediaFormat.createAudioFormat(
-                MediaFormat.MIMETYPE_AUDIO_AAC, SAMPLE_RATE, 1);
-        format.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
-        format.setInteger(MediaFormat.KEY_BIT_RATE, AAC_BIT_RATE);
+        final boolean opus = codec == Codec.OPUS;
+        final String mime = opus ? MediaFormat.MIMETYPE_AUDIO_OPUS : MediaFormat.MIMETYPE_AUDIO_AAC;
+        // One codec frame of zero-filled PCM, fed while not transmitting to keep
+        // the camera's backchannel warm.
+        final byte[] silence = new byte[(opus ? OPUS_FRAME_SAMPLES : AAC_FRAME_SAMPLES) * 2];
+        final long frameMs = opus ? OPUS_FRAME_MS : AAC_FRAME_MS;
+
+        MediaFormat format = MediaFormat.createAudioFormat(mime, SAMPLE_RATE, 1);
+        format.setInteger(MediaFormat.KEY_BIT_RATE, ENCODED_BIT_RATE);
         format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, minBuf);
-        final MediaCodec codec;
+        if (!opus) {
+            format.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
+        }
+        final MediaCodec encoder;
         try {
-            codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC);
-            codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-            codec.start();
+            encoder = MediaCodec.createEncoderByType(mime);
+            encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+            encoder.start();
         } catch (IOException | IllegalStateException | IllegalArgumentException e) {
-            aacSessionRunning = false;
-            deliverEnd("AAC encoder unavailable");
+            encodedSessionRunning = false;
+            deliverEnd((opus ? "Opus" : "AAC") + " encoder unavailable");
             stop();
             return;
         }
@@ -304,14 +363,11 @@ public class TalkClient {
         new Thread(() -> {
             MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
             // Scratch buffer for real mic PCM, so gain can be applied before handing
-            // samples to the encoder (the encoder input is opaque AAC).
+            // samples to the encoder (the encoder input is opaque encoded data).
             byte[] pcm = new byte[minBuf];
-            // One AAC-LC frame of zero-filled PCM, fed while not transmitting to keep
-            // the camera's backchannel warm.
-            byte[] silence = new byte[AAC_FRAME_SAMPLES * 2];
             AudioRecord recorder = null;   // opened only while actually transmitting
             try {
-                while (aacSessionRunning) {
+                while (encodedSessionRunning) {
                     boolean tx = transmitting;
                     if (tx && recorder == null) {
                         AudioRecord r = new AudioRecord(
@@ -323,7 +379,7 @@ public class TalkClient {
                         if (r.getState() != AudioRecord.STATE_INITIALIZED) {
                             r.release();
                             deliverEnd(REASON_MIC_UNAVAILABLE);
-                            stop();   // clears aacSessionRunning and closes the socket
+                            stop();   // clears encodedSessionRunning and closes the socket
                             break;
                         }
                         recorder = r;
@@ -336,9 +392,9 @@ public class TalkClient {
                         recorder = null;
                     }
 
-                    int inIdx = codec.dequeueInputBuffer(10_000);
+                    int inIdx = encoder.dequeueInputBuffer(10_000);
                     if (inIdx >= 0) {
-                        ByteBuffer inBuf = codec.getInputBuffer(inIdx);
+                        ByteBuffer inBuf = encoder.getInputBuffer(inIdx);
                         inBuf.clear();
                         int n;
                         if (recorder != null) {
@@ -352,16 +408,16 @@ public class TalkClient {
                             n = Math.min(silence.length, inBuf.remaining());
                             inBuf.put(silence, 0, n);
                         }
-                        codec.queueInputBuffer(inIdx, 0, Math.max(n, 0), 0, 0);
+                        encoder.queueInputBuffer(inIdx, 0, Math.max(n, 0), 0, 0);
                     }
-                    drainEncoder(codec, info, webSocket);
+                    drainEncoder(encoder, info, webSocket);
 
                     // Real mic reads self-pace (they block until captured); silence
                     // does not, so throttle it to ~one frame of real time, otherwise
-                    // the loop would flood the socket with silent AUs.
+                    // the loop would flood the socket with silent packets.
                     if (recorder == null) {
                         try {
-                            Thread.sleep(AAC_FRAME_MS);
+                            Thread.sleep(frameMs);
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                             break;
@@ -370,24 +426,25 @@ public class TalkClient {
                 }
                 // Flush the encoder so any buffered tail is emitted before release.
                 try {
-                    int inIdx = codec.dequeueInputBuffer(10_000);
+                    int inIdx = encoder.dequeueInputBuffer(10_000);
                     if (inIdx >= 0) {
-                        codec.queueInputBuffer(inIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+                        encoder.queueInputBuffer(inIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
                     }
-                    drainEncoder(codec, info, webSocket);
+                    drainEncoder(encoder, info, webSocket);
                 } catch (IllegalStateException ignored) {}
             } finally {
                 if (recorder != null) {
                     try { recorder.stop(); } catch (IllegalStateException ignored) {}
                     recorder.release();
                 }
-                try { codec.stop(); } catch (IllegalStateException ignored) {}
-                codec.release();
+                try { encoder.stop(); } catch (IllegalStateException ignored) {}
+                encoder.release();
             }
-        }, "talk-aac").start();
+        }, opus ? "talk-opus" : "talk-aac").start();
     }
 
-    /** Drains ready AAC access units and sends each as one binary message. */
+    /** Drains ready encoded units (AAC access units / Opus packets) and sends
+     * each as one binary message. */
     private static void drainEncoder(MediaCodec codec, MediaCodec.BufferInfo info, WebSocket webSocket) {
         int outIdx = codec.dequeueOutputBuffer(info, 0);
         while (outIdx >= 0) {
@@ -427,7 +484,7 @@ public class TalkClient {
      */
     public synchronized void stop() {
         transmitting = false;
-        aacSessionRunning = false;
+        encodedSessionRunning = false;
         if (ws != null) {
             ws.close(1000, "user released");
             ws = null;

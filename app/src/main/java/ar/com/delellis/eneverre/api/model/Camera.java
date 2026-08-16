@@ -223,6 +223,18 @@ public class Camera implements Serializable {
                 && capabilities.getTalkCodecs().contains("aac");
     }
 
+    /**
+     * Whether the camera's backchannel accepts raw Opus packets (RFC 7587
+     * passthrough). When true, the talk client may negotiate {@code codec=opus}
+     * and send one 20 ms Opus packet per message; otherwise it falls back to
+     * AAC or PCM/G.711.
+     */
+    public boolean supportsTalkOpus() {
+        return capabilities != null
+                && capabilities.getTalkCodecs() != null
+                && capabilities.getTalkCodecs().contains("opus");
+    }
+
     public void setPrivacy(boolean enable) {
         privacy = enable;
     }
