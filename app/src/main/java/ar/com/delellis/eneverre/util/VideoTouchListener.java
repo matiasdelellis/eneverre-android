@@ -25,6 +25,17 @@ import android.view.ViewConfiguration;
  * drag is reported as raw pixel deltas so the owner can drive the physical
  * camera. While zoomed the drag keeps panning digitally, as before. This
  * claims the unzoomed drag from any enclosing pager.
+ *
+ * By default it zooms by scaling the view it is attached to, which must
+ * therefore be a <b>container</b> of the video surface, not the surface itself:
+ * panning moves the content with {@code setScrollX/Y}, which a
+ * {@code SurfaceView} does not follow. A {@link TransformTarget} takes over
+ * instead when one is set — see {@link #setTransformTarget}.
+ *
+ * It consumes every gesture, so a view that also had an {@code OnClickListener}
+ * must route the tap through {@link #setOnTapListener} instead (the click
+ * listener stays for accessibility services, which call {@code performClick}
+ * directly).
  */
 public class VideoTouchListener implements View.OnTouchListener {
 
@@ -40,6 +51,28 @@ public class VideoTouchListener implements View.OnTouchListener {
         void onPtzPanEnd();
     }
 
+    /** Notified on a tap that turned out not to be a double tap (which zooms). */
+    public interface OnTapListener {
+        void onTap();
+    }
+
+    /**
+     * A view that magnifies its own content instead of being scaled — a
+     * {@code TextureView} with a transform matrix. Zooming a view grows it past
+     * its parent, which a video surface does not let the parent clip; a target
+     * keeps the bounds fixed and moves the picture inside them.
+     */
+    public interface TransformTarget {
+        /**
+         * @param scale magnification, 1 = fit
+         * @param panX  horizontal offset of the content, in unzoomed view
+         *              pixels (positive moves the picture left), already
+         *              clamped to what the magnification actually overflows
+         * @param panY  the same, vertically
+         */
+        void onVideoTransform(float scale, float panX, float panY);
+    }
+
     private static final int NONE = 0;
     private static final int DRAG = 1;
     private static final int ZOOM = 2;
@@ -52,16 +85,25 @@ public class VideoTouchListener implements View.OnTouchListener {
     private int touchSlop = -1;
     private float lastDistance = 1f;
     private float currentScale = 1f;
+    /** Pan of the content in unzoomed pixels, i.e. what a scroll offset means. */
+    private float panX = 0f;
+    private float panY = 0f;
     private int maxScrollX = 0;
     private int maxScrollY = 0;
 
     /** The view currently being touched; valid for the duration of an onTouch pass. */
     private View videoView;
 
+    /** Set when the zoom is applied to a target's content instead of to a view. */
+    private TransformTarget transformTarget = null;
+    private View transformView = null;
+
     /** Created lazily on the first touch (it needs a Context from the view). */
     private GestureDetector gestureDetector;
     private OnLongPressListener longPressListener = null;
     private boolean longPressActive = false;
+
+    private OnTapListener tapListener = null;
 
     private OnPtzPanListener ptzPanListener = null;
     private boolean ptzPanEnabled = false;
@@ -74,6 +116,25 @@ public class VideoTouchListener implements View.OnTouchListener {
 
     public void setOnPtzPanListener(OnPtzPanListener listener) {
         ptzPanListener = listener;
+    }
+
+    public void setOnTapListener(OnTapListener listener) {
+        tapListener = listener;
+    }
+
+    /**
+     * Zooms {@code target}'s content instead of scaling the touched view. The
+     * target is also what the zoom bounds are computed from, so the touched
+     * view can be a larger frame around it (the letterbox area included).
+     */
+    public <T extends View & TransformTarget> void setTransformTarget(T target) {
+        transformTarget = target;
+        transformView = target;
+    }
+
+    /** The view whose size the zoom is measured against. */
+    private View zoomView() {
+        return transformView != null ? transformView : videoView;
     }
 
     /** Toggled by the owner as PTZ availability changes (capability, privacy mode). */
@@ -105,6 +166,17 @@ public class VideoTouchListener implements View.OnTouchListener {
                 }
 
                 @Override
+                public boolean onSingleTapConfirmed(MotionEvent e) {
+                    // Confirmed, i.e. no second tap followed: a double tap is the
+                    // zoom toggle below, not a tap.
+                    if (tapListener == null) {
+                        return false;
+                    }
+                    tapListener.onTap();
+                    return true;
+                }
+
+                @Override
                 public boolean onDoubleTap(MotionEvent e) {
                     // Toggle between fit (1x) and 2x, centering the zoom on the tapped
                     // point. Any in-progress hold is cancelled so it doesn't stick.
@@ -133,6 +205,27 @@ public class VideoTouchListener implements View.OnTouchListener {
             if (ptzPanListener != null) {
                 ptzPanListener.onPtzPanEnd();
             }
+        }
+    }
+
+    /**
+     * Drops any zoom and pan, for a view about to show something else (a
+     * recycled grid cell binding another camera).
+     */
+    public void reset() {
+        touchMode = NONE;
+        currentScale = 1f;
+        panX = 0f;
+        panY = 0f;
+        maxScrollX = 0;
+        maxScrollY = 0;
+        if (transformTarget != null) {
+            transformTarget.onVideoTransform(1f, 0f, 0f);
+        } else if (videoView != null) {
+            videoView.setScaleX(1f);
+            videoView.setScaleY(1f);
+            videoView.setScrollX(0);
+            videoView.setScrollY(0);
         }
     }
 
@@ -211,14 +304,14 @@ public class VideoTouchListener implements View.OnTouchListener {
                     v.getParent().requestDisallowInterceptTouchEvent(true);
                     float dx = (event.getRawX() - lastEvent.x) / currentScale;
                     float dy = (event.getRawY() - lastEvent.y) / currentScale;
-                    v.setScrollX(v.getScrollX() - (int) dx);
-                    v.setScrollY(v.getScrollY() - (int) dy);
+                    panX -= dx;
+                    panY -= dy;
                     clampScroll();
 
                     lastEvent.set(event.getRawX(), event.getRawY());
                 } else if (touchMode == ZOOM) {
                     float newDistance = getPinchDistance(event);
-                    setScale(v.getScaleX() * (newDistance / lastDistance));
+                    setScale(currentScale * (newDistance / lastDistance));
                     // Advance the reference distance so the next MOVE scales by the
                     // incremental change. Without this, every MOVE multiplies the
                     // (already grown) scale by the ratio to the *initial* distance,
@@ -240,18 +333,28 @@ public class VideoTouchListener implements View.OnTouchListener {
     private void setScale(float scale) {
         currentScale = clamp(scale, 1.0f, 9f);
 
-        videoView.setScaleX(currentScale);
-        videoView.setScaleY(currentScale);
-
+        View zoomView = zoomView();
         // D'Oh!. Took me a week to discover this math.
-        maxScrollX = (int) ((currentScale - 1f) * videoView.getWidth() / (2 * currentScale));
-        maxScrollY = (int) ((currentScale - 1f) * videoView.getHeight() / (2 * currentScale));
+        maxScrollX = (int) ((currentScale - 1f) * zoomView.getWidth() / (2 * currentScale));
+        maxScrollY = (int) ((currentScale - 1f) * zoomView.getHeight() / (2 * currentScale));
+
+        if (transformTarget == null) {
+            videoView.setScaleX(currentScale);
+            videoView.setScaleY(currentScale);
+        }
     }
 
-    /** Clamps the current pan to the bounds computed by {@link #setScale}. */
+    /** Clamps the current pan to the bounds computed by {@link #setScale} and applies it. */
     private void clampScroll() {
-        videoView.setScrollX(clamp(videoView.getScrollX(), -maxScrollX, maxScrollX));
-        videoView.setScrollY(clamp(videoView.getScrollY(), -maxScrollY, maxScrollY));
+        panX = clamp(panX, -maxScrollX, maxScrollX);
+        panY = clamp(panY, -maxScrollY, maxScrollY);
+
+        if (transformTarget != null) {
+            transformTarget.onVideoTransform(currentScale, panX, panY);
+        } else {
+            videoView.setScrollX((int) panX);
+            videoView.setScrollY((int) panY);
+        }
     }
 
     /**
@@ -261,9 +364,16 @@ public class VideoTouchListener implements View.OnTouchListener {
     private void applyScale(float scale, float focusX, float focusY) {
         setScale(scale);
 
+        View zoomView = zoomView();
+        // The tap is in the touched view's coordinates; a target sits inside it
+        // (centred in its letterbox), so shift the focus into its own space.
+        if (transformView != null) {
+            focusX -= transformView.getLeft();
+            focusY -= transformView.getTop();
+        }
         float factor = (currentScale - 1f) / currentScale;
-        videoView.setScrollX((int) ((focusX - videoView.getWidth() / 2f) * factor));
-        videoView.setScrollY((int) ((focusY - videoView.getHeight() / 2f) * factor));
+        panX = (focusX - zoomView.getWidth() / 2f) * factor;
+        panY = (focusY - zoomView.getHeight() / 2f) * factor;
         clampScroll();
 
         videoView.getParent().requestDisallowInterceptTouchEvent(currentScale > 1f);

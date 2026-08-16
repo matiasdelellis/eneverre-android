@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -44,6 +45,8 @@ import ar.com.delellis.eneverre.model.Location;
  */
 public class MosaicFragment extends Fragment
         implements MosaicAdapter.OnCellClickListener, MosaicHost.LayoutModeListener {
+
+    private static final String TAG = "MosaicFragment";
 
     private static final String ARG_LOCATION = "location";
 
@@ -179,7 +182,8 @@ public class MosaicFragment extends Fragment
         }
 
         if (recyclerView.isComputingLayout()) {
-            // setCellHeight rebinds the cells, which a layout pass forbids.
+            // setCellHeight resizes the cells on screen, i.e. touches their
+            // layout params, which a layout pass in flight forbids.
             recyclerView.post(this::attachWhenReady);
             return false;
         }
@@ -203,6 +207,13 @@ public class MosaicFragment extends Fragment
             // tall as it needs to be.
             columns = spanCountFor(count);
             cellHeight = (int) Math.round((double) width / columns / TARGET_CELL_ASPECT);
+        }
+
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "grid: viewport=" + width + "x" + height
+                    + " cameras=" + count + " columns=" + columns
+                    + " cellHeight=" + cellHeight
+                    + (fitToScreen ? " (fit to screen)" : " (scrolling)"));
         }
 
         layoutManager.setSpanCount(columns);

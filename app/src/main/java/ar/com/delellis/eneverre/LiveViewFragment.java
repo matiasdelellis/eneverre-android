@@ -13,6 +13,7 @@ import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Bundle;
 
@@ -53,7 +54,6 @@ import ar.com.delellis.eneverre.util.StoragePermission;
 import ar.com.delellis.eneverre.util.VideoLayout;
 import ar.com.delellis.eneverre.util.AppPreferences;
 import ar.com.delellis.eneverre.util.Download;
-import ar.com.delellis.eneverre.util.Snapshot;
 import ar.com.delellis.eneverre.util.Time;
 import ar.com.delellis.eneverre.util.VideoTouchListener;
 
@@ -146,7 +146,7 @@ public class LiveViewFragment extends Fragment {
                 stopLive();
                 return true;
             } else if (itemId == R.id.pip_action) {
-                ((ViewActivity) requireActivity()).enterPipMode(currentCamera);
+                ((ViewActivity) requireActivity()).enterPipMode(currentCamera, videoBounds());
                 return true;
             } else if (itemId == R.id.volume_action) {
                 boolean muted = !prefs.isGlobalMute();
@@ -242,8 +242,12 @@ public class LiveViewFragment extends Fragment {
         livePlayer = view.findViewById(R.id.live_video);
         livePlayer.setListener(livePlayerListener);
 
+        // The gestures land on the frame (the letterbox bars included) but zoom
+        // the player's content, which is what keeps a zoomed picture inside its
+        // bounds instead of growing over everything around it.
         videoFrame = view.findViewById(R.id.live_video_frame);
         videoTouchListener = new VideoTouchListener();
+        videoTouchListener.setTransformTarget(livePlayer);
         videoTouchListener.setOnPtzPanListener(new VideoTouchListener.OnPtzPanListener() {
             @Override
             public void onPtzPan(float dxPixels, float dyPixels) {
@@ -573,25 +577,33 @@ public class LiveViewFragment extends Fragment {
         sendPtzMove(pan, tilt);
     }
 
+    /**
+     * Where the picture sits in the window, for the Picture-in-Picture
+     * transition to animate from (see {@link ViewActivity#enterPipMode}).
+     * Null when there is nothing on screen to animate.
+     */
+    private Rect videoBounds() {
+        if (livePlayer == null) {
+            return null;
+        }
+        Rect bounds = new Rect();
+        if (!livePlayer.getGlobalVisibleRect(bounds) || bounds.isEmpty()) {
+            return null;
+        }
+        return bounds;
+    }
+
     private void takeSnapshot() {
-        // The player view *is* the video surface, so PixelCopy reads it directly.
-        Snapshot.getSurfaceBitmap(livePlayer, new Snapshot.PixelCopyListener() {
-            @Override
-            public void onSurfaceBitmapReady(Bitmap bitmap) {
-                if (viewGone()) {
-                    return;
-                }
-                String fileName = Download.buildFileName(currentCamera.getName(), Time.MStoFriendlyURL(System.currentTimeMillis()), "png");
-                Download.saveSnapshotAndShare(requireActivity(), bitmap, fileName, currentCamera.getName());
-            }
-            @Override
-            public void onSurfaceBitmapError(int errorCode) {
-                if (viewGone()) {
-                    return;
-                }
-                Toast.makeText(requireContext(), R.string.error_snapshot, LENGTH_LONG).show();
-            }
-        });
+        // The player draws in the view hierarchy, so its current frame is one
+        // call away — no PixelCopy off a surface (that is still how the
+        // recording playback, which is a SurfaceView, grabs its own).
+        Bitmap bitmap = livePlayer.snapshot();
+        if (bitmap == null) {
+            Toast.makeText(requireContext(), R.string.error_snapshot, LENGTH_LONG).show();
+            return;
+        }
+        String fileName = Download.buildFileName(currentCamera.getName(), Time.MStoFriendlyURL(System.currentTimeMillis()), "png");
+        Download.saveSnapshotAndShare(requireActivity(), bitmap, fileName, currentCamera.getName());
     }
 
     /** Spinner while connecting, error recovery once a stream drops. */
@@ -637,6 +649,8 @@ public class LiveViewFragment extends Fragment {
         if (livePlayer == null) {
             return;
         }
+        // Fit from the camera's metadata; the decoder's own geometry refines it.
+        livePlayer.setVideoAspect(currentCamera.getWidth(), currentCamera.getHeight());
         String videoUrl = currentCamera.getRtsp();
         livePlayer.playUri(Uri.parse(videoUrl));
     }
@@ -862,16 +876,8 @@ public class LiveViewFragment extends Fragment {
         int color = ContextCompat.getColor(fab.getContext(), R.color.record_red);
         fab.setImageTintList(ColorStateList.valueOf(color));
 
-        Snapshot.getSurfaceBitmap(livePlayer, new Snapshot.PixelCopyListener() {
-            @Override
-            public void onSurfaceBitmapReady(Bitmap bitmap) {
-                startBitmap = bitmap;
-            }
-            @Override
-            public void onSurfaceBitmapError(int errorCode) {
-                startBitmap = null;
-            }
-        });
+        // Thumbnail for the clip that is starting; null is fine, it is optional.
+        startBitmap = livePlayer.snapshot();
 
         startRecord = System.currentTimeMillis();
         Toast.makeText(requireContext(), getString(R.string.starting_recording), LENGTH_SHORT).show();

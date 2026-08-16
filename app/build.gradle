@@ -138,6 +138,7 @@ androidComponents {
 
 dependencies {
     implementation libs.rtsp.client
+    implementation libs.kotlin.stdlib
     implementation libs.media3.exoplayer
     implementation libs.media3.ui
     implementation libs.retrofit

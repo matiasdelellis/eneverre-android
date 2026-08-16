@@ -8,12 +8,14 @@ import android.app.PictureInPictureParams;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.graphics.Rect;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Rational;
 import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.annotation.ChecksSdkIntAtLeast;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -222,23 +224,42 @@ public class ViewActivity extends AppCompatActivity
      * Whether this device can enter Picture-in-Picture. PiP params/entry need
      * API 26+ (minSdk is 24) and the hardware/OS must advertise the feature —
      * Android TV and some phones don't. The menu action is gated on this too.
+     *
+     * The annotation is what tells lint that a true here means API 26+, so the
+     * PiP calls guarded by it are not flagged as unsafe on minSdk.
      */
+    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.O)
     public boolean isPipSupported() {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 && getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
     }
 
-    /** Called by the visible {@link LiveViewFragment} from its menu. */
-    public void enterPipMode(Camera camera) {
+    /**
+     * Called by the visible {@link LiveViewFragment} from its menu.
+     *
+     * @param sourceHint window-coordinate bounds of the video on screen, or
+     *                   {@code null}. Without it the system has no idea which
+     *                   part of the window survives the transition, so it
+     *                   cross-fades the whole thing — and whatever the app has
+     *                   not drawn yet at the new size (the window behind, the
+     *                   task's starting window with the app icon) shows through
+     *                   while the animation runs. With it, the animation is a
+     *                   crop-and-scale of the picture itself, and on Android 12+
+     *                   it also smooths the way back out.
+     */
+    public void enterPipMode(Camera camera, Rect sourceHint) {
         // Guard both the API level and the feature: without this, API 24/25 hit a
         // missing PictureInPictureParams and unsupported devices throw on entry.
         if (!isPipSupported()) {
             return;
         }
         Rational aspectRatio = VideoLayout.pipAspectRatio(camera.getWidth(), camera.getHeight());
-        PictureInPictureParams params = new PictureInPictureParams.Builder()
-                .setAspectRatio(aspectRatio)
-                .build();
+        PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder()
+                .setAspectRatio(aspectRatio);
+        if (sourceHint != null && !sourceHint.isEmpty()) {
+            builder.setSourceRectHint(sourceHint);
+        }
+        PictureInPictureParams params = builder.build();
         try {
             enterPictureInPictureMode(params);
         } catch (IllegalStateException | IllegalArgumentException e) {
