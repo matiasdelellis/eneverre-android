@@ -1,13 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Backup rules for API 30 and below (referenced by android:fullBackupContent).
+
+   The app stores nothing in the backup worth restoring: the session lives in an
+   EncryptedSharedPreferences file whose master key is in the Android Keystore
+   and never leaves the device, so a restored copy cannot be decrypted. Exclude
+   it instead of uploading encrypted tokens to the cloud just to discard them on
+   restore — the app simply asks for the password again.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="EneverreSecureStore.xml" />
 </full-backup-content>

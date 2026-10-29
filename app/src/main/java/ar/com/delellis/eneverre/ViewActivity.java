@@ -2,6 +2,7 @@ package ar.com.delellis.eneverre;
 
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
+import static android.widget.Toast.LENGTH_LONG;
 import static android.widget.Toast.LENGTH_SHORT;
 
 import android.app.PictureInPictureParams;
@@ -28,6 +29,8 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.model.Location;
+import ar.com.delellis.eneverre.util.SecureStore;
+import ar.com.delellis.eneverre.util.SystemBars;
 import ar.com.delellis.eneverre.util.VideoLayout;
 
 /**
@@ -101,7 +104,8 @@ public class ViewActivity extends AppCompatActivity
         // event's moment. On a restore we ignore it and land on Live: restoring
         // straight into Playback would need the current camera, which only
         // arrives asynchronously from the pager.
-        boolean startOnPlayback = intent.getBooleanExtra(EXTRA_START_ON_PLAYBACK, false);
+        boolean startOnPlayback = intent.getBooleanExtra(EXTRA_START_ON_PLAYBACK, false)
+                && SecureStore.getInstance().canPlayback();
         if (savedInstanceState == null && startOnPlayback) {
             long initialTimeMs = intent.getLongExtra(EXTRA_INITIAL_TIME_MS, 0L);
             playbackContainer = PlaybackContainerFragment.newInstance(location, currentPosition, initialTimeMs);
@@ -142,11 +146,41 @@ public class ViewActivity extends AppCompatActivity
         updateChromeForOrientation(getResources().getConfiguration().orientation);
     }
 
-    /** Hides the toolbar and bottom bar in landscape for a full-screen video. */
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // The role can change server-side while the app is in the background;
+        // re-evaluate the Playback tab so a demoted account loses it.
+        updatePlaybackTabEnabled();
+    }
+
+    /**
+     * Called by the visible fragment when a single-camera endpoint answered
+     * {@code 404} and a fresh camera list confirmed the camera is gone — it left
+     * this account's ACL, or an admin deleted it. The list is authoritative, so
+     * close the view and ask {@link CamerasActivity} to reload instead of
+     * retrying a camera this account may no longer see.
+     */
+    public void onCameraUnavailable(Camera camera) {
+        Toast.makeText(this, R.string.error_camera_unavailable, LENGTH_LONG).show();
+        setResult(CamerasActivity.RESULT_CAMERA_GONE);
+        finish();
+    }
+
+    /** Hides the app chrome and the system bars in landscape for a full-screen video. */
     private void updateChromeForOrientation(int orientation) {
-        boolean landscape = orientation == Configuration.ORIENTATION_LANDSCAPE;
-        findViewById(R.id.app_bar).setVisibility(landscape ? GONE : VISIBLE);
-        bottomNav.setVisibility(landscape ? GONE : VISIBLE);
+        setFullscreen(orientation == Configuration.ORIENTATION_LANDSCAPE);
+    }
+
+    /**
+     * Full screen means the video gets the whole display: our own chrome
+     * (toolbar, bottom tabs) and the system bars are hidden together, so
+     * landscape does not keep a status/navigation strip over the picture.
+     */
+    private void setFullscreen(boolean fullscreen) {
+        findViewById(R.id.app_bar).setVisibility(fullscreen ? GONE : VISIBLE);
+        bottomNav.setVisibility(fullscreen ? GONE : VISIBLE);
+        SystemBars.setHidden(this, fullscreen);
     }
 
     private void showLive() {
@@ -211,13 +245,21 @@ public class ViewActivity extends AppCompatActivity
     }
 
     /**
-     * Enables the Playback tab only when the current camera supports it, so it
-     * can't be opened from Live for cameras with no recordings. (Swiping into an
-     * unsupported camera while already on the tab still shows the empty state.)
+     * Enables the Playback tab only when the account's role allows playback
+     * ({@code viewer} and {@code monitor} never do) and the current camera
+     * supports it, so it can't be opened from Live for cameras with no
+     * recordings. (Swiping into an unsupported camera while already on the tab
+     * still shows the empty state.)
      */
     private void updatePlaybackTabEnabled() {
-        boolean supported = currentCamera != null && currentCamera.hasPlayback();
+        boolean roleAllows = SecureStore.getInstance().canPlayback();
+        boolean supported = roleAllows && currentCamera != null && currentCamera.hasPlayback();
         bottomNav.getMenu().findItem(R.id.nav_playback).setEnabled(supported);
+        // A role change mid-session (viewer can never play back) must not leave
+        // the tab selected on a screen it may not use.
+        if (!roleAllows && bottomNav.getSelectedItemId() == R.id.nav_playback) {
+            bottomNav.setSelectedItemId(R.id.nav_live);
+        }
     }
 
     /**
@@ -272,8 +314,14 @@ public class ViewActivity extends AppCompatActivity
     public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode);
 
-        findViewById(R.id.app_bar).setVisibility(isInPictureInPictureMode ? GONE : VISIBLE);
-        bottomNav.setVisibility(isInPictureInPictureMode ? GONE : VISIBLE);
+        if (isInPictureInPictureMode) {
+            // The PiP window shows only the video.
+            setFullscreen(true);
+        } else {
+            // Back at full size: restore what the current orientation asks for
+            // (a rotation that happened while in PiP is applied here too).
+            updateChromeForOrientation(getResources().getConfiguration().orientation);
+        }
     }
 
     @Override

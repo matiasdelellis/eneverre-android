@@ -4,6 +4,7 @@
     <string name="passwordHint">Password</string>
     <string name="usernameHint">Username</string>
     <string name="serverHint" translatable="false">https://</string>
+    <string name="login_server">Server</string>
     <string name="required_configuration">Required configuration</string>
     <string name="change_password_title">Set a new password</string>
     <string name="change_password_message">Your account requires a new password before you can continue.</string>
@@ -23,7 +24,15 @@
     <string name="ptz_move_right">Move camera right</string>
     <string name="reconnect">Reconnect</string>
     <string name="more_options">More options</string>
+    <string name="ptz_set_home">Set current position as Home</string>
+    <string name="ptz_set_privacy">Set current position as privacy position</string>
+    <string name="ptz_set_home_done">Home position saved</string>
+    <string name="ptz_set_privacy_done">Privacy position saved</string>
+    <string name="error_ptz_position">Could not read the camera position</string>
+    <string name="error_camera_config">Could not load the camera configuration</string>
+    <string name="error_save_position">Could not save the position</string>
     <string name="mute">Mute</string>
+    <string name="unmute">Unmute</string>
     <string name="recalibrate_position">Recalibrate the position…</string>
     <string name="cameras">Cameras</string>
     <string name="cameras_empty">No cameras available</string>
@@ -49,11 +58,19 @@
     <string name="error_get_recordings">Failed to get camera recordings</string>
     <string name="error_network">No network connection</string>
     <string name="error_unauthorized">Invalid username or password</string>
+    <string name="error_forbidden">You do not have permission for this action</string>
+    <string name="session_expired">Your session expired. Sign in again.</string>
     <string name="error_server">The server reported an error</string>
     <string name="error_unexpected">Unexpected error</string>
     <string name="retry">Retry</string>
+    <!-- Startup: the stored session could not be validated because of the server. -->
+    <string name="splash_server_unreachable">Could not reach the server</string>
+    <string name="splash_server_unreachable_message">%1$s is not responding. Check the connection and that the server is running, then try again.</string>
+    <string name="splash_server_error">The server is not available</string>
+    <string name="splash_server_error_message">%1$s answered with an error. Try again in a few moments.</string>
     <string name="there_is_no_recording">There is no recording</string>
     <string name="playback_reached_end">End of the available recordings</string>
+    <string name="playback_audio_only">Audio only — this part of the recording has no video</string>
     <string name="no_recordings">No recordings</string>
     <string name="events">Events</string>
     <string name="event_motion">Motion</string>
@@ -63,6 +80,29 @@
     <string name="logout">Log out</string>
     <string name="logout_confirm_title">Log out?</string>
     <string name="logout_confirm_message">You will need to enter your credentials again to sign back in.</string>
+    <!-- Opt-in app lock -->
+    <string name="app_lock">Biometric lock</string>
+    <string name="app_lock_enabled">Lock enabled</string>
+    <string name="app_lock_disabled">Lock disabled</string>
+    <string name="app_lock_unavailable_title">Cannot enable the lock</string>
+    <string name="app_lock_unavailable_message">Set up a screen lock (fingerprint, face or PIN) on this device to use it.</string>
+    <string name="lock_title">Eneverre is locked</string>
+    <string name="lock_message">Use your fingerprint or the device unlock to continue.</string>
+    <string name="lock_unlock">Unlock</string>
+    <string name="lock_prompt_title">Unlock Eneverre</string>
+    <string name="lock_prompt_subtitle">Use your fingerprint or the device PIN</string>
+    <!-- Settings hub -->
+    <string name="settings">Settings</string>
+    <string name="settings_security">Security</string>
+    <string name="settings_account">Account</string>
+    <string name="settings_app">Application</string>
+    <string name="settings_app_lock_subtitle">Ask for your fingerprint when you return</string>
+    <string name="settings_change_password_subtitle">Choose a new password</string>
+    <string name="settings_sessions_subtitle">Devices with an active session</string>
+    <string name="settings_users_subtitle">Roles and camera access</string>
+    <string name="settings_footer">Server: %1$s\nVersion %2$s</string>
+    <string name="change_password_current_hint">Current password</string>
+    <string name="error_current_password_required">Enter your current password</string>
     <string name="about_eneverre">About Eneverre…</string>
     <string name="title_about">About Eneverre</string>
     <string name="about_description">An Android client for the eneverre-api, which consolidates the camera streams from different manufacturers into a single application.</string>
@@ -110,7 +150,14 @@
     <string name="users_empty">No users</string>
     <string name="user_role_admin">Administrator</string>
     <string name="user_role_user">User</string>
-    <string name="user_role_admin_switch">Administrator</string>
+    <string name="user_role_viewer">Viewer</string>
+    <string name="user_role_monitor">Monitor</string>
+    <string name="user_role_label">Role</string>
+    <string name="user_cameras">Allowed cameras</string>
+    <string name="user_cameras_all">All cameras</string>
+    <string name="user_cameras_saved">Camera access updated</string>
+    <string name="error_user_cameras">Could not load camera access</string>
+    <string name="error_save_user_cameras">Could not save camera access</string>
     <!-- %1$s = full name, %2$s = role -->
     <string name="user_subtitle">%1$s · %2$s</string>
     <string name="first_name_hint">First name</string>
@@ -165,4 +212,45 @@
     <string name="talk_camera_volume">Camera volume</string>
     <string name="talk_title">Two-way audio</string>
     <string name="talk_close">Close</string>
+    <!-- Camera settings (admin) -->
+    <string name="camera_settings_title">Camera settings</string>
+    <!-- %1$s = last-fetch time of the snapshot -->
+    <string name="camera_settings_updated">Updated at %1$s</string>
+    <string name="camera_settings_unavailable">Camera settings are not available</string>
+    <string name="camera_settings_load_failed">Could not load camera settings</string>
+    <string name="camera_settings_update_failed">Could not update camera settings</string>
+    <string name="camera_settings_section_daynight">Day/night mode</string>
+    <string name="camera_settings_section_light">Illumination</string>
+    <string name="camera_settings_section_audio">Audio</string>
+    <string name="camera_settings_section_motion">Motion</string>
+    <string name="camera_settings_section_ptz">PTZ</string>
+    <string name="camera_settings_mode_auto">Auto</string>
+    <string name="camera_settings_mode_day">Day</string>
+    <string name="camera_settings_mode_night">Night</string>
+    <string name="camera_settings_mode_manual">Manual</string>
+    <string name="camera_settings_ircut">IR cut filter</string>
+    <string name="camera_settings_ir850">IR 850 nm</string>
+    <string name="camera_settings_ir940">IR 940 nm</string>
+    <string name="camera_settings_white">White light</string>
+    <string name="camera_settings_mic">Microphone</string>
+    <string name="camera_settings_speaker">Speaker</string>
+    <string name="camera_settings_motion">Motion detection</string>
+
+    <!-- Monitor-only accounts -->
+    <string name="monitor_message">This account is for monitoring only. It can read the server status and metrics, but not the cameras.</string>
+    <string name="monitor_server">Server</string>
+    <string name="monitor_uptime">Uptime</string>
+    <string name="monitor_cameras">Cameras connected</string>
+    <string name="monitor_cameras_value">%1$d / %2$d</string>
+    <string name="monitor_recording">Recording</string>
+    <string name="monitor_recording_on">On (%1$d cameras)</string>
+    <string name="monitor_storage">Storage</string>
+    <string name="monitor_storage_value">%1$s free of %2$s</string>
+    <string name="monitor_storage_unknown">Not reported</string>
+    <string name="monitor_value_unknown">—</string>
+    <string name="monitor_unavailable">Could not read the server status</string>
+    <string name="refresh">Refresh</string>
+    <string name="on">On</string>
+    <string name="off">Off</string>
+    <string name="error_camera_unavailable">This camera is no longer available</string>
 </resources>

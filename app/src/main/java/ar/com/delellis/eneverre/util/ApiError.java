@@ -19,13 +19,21 @@ public final class ApiError {
 
     /** True for HTTP responses that indicate the credentials were rejected. */
     public static boolean isUnauthorized(int httpCode) {
-        return httpCode == 401 || httpCode == 403;
+        return httpCode == 401;
+    }
+
+    /** True for HTTP responses that indicate the account lacks the permission. */
+    public static boolean isForbidden(int httpCode) {
+        return httpCode == 403;
     }
 
     /** Message for a non-successful HTTP response. */
     public static String message(Context context, int httpCode) {
         if (isUnauthorized(httpCode)) {
             return context.getString(R.string.error_unauthorized);
+        }
+        if (isForbidden(httpCode)) {
+            return context.getString(R.string.error_forbidden);
         }
         if (httpCode >= 500) {
             return context.getString(R.string.error_server);

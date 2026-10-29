@@ -1,19 +1,17 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Backup rules for API 31+ (referenced by android:dataExtractionRules).
+
+   The secure session store is excluded from cloud backup and from device
+   transfer: its master key lives in the device's Keystore, so the copied file
+   would be undecryptable anyway. Everything else (non-sensitive app
+   preferences such as the mosaic view mode) may be restored.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="sharedpref" path="EneverreSecureStore.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="sharedpref" path="EneverreSecureStore.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>

@@ -2,6 +2,7 @@
     <string name="loginLabel">Iniciar sesión</string>
     <string name="passwordHint">Contraseña</string>
     <string name="usernameHint">Usuario</string>
+    <string name="login_server">Servidor</string>
     <string name="required_configuration">Configuración requerida</string>
     <string name="change_password_title">Establece una nueva contraseña</string>
     <string name="change_password_message">Tu cuenta requiere una nueva contraseña antes de continuar.</string>
@@ -21,7 +22,15 @@
     <string name="ptz_move_right">Mover cámara hacia la derecha</string>
     <string name="reconnect">Reconectar</string>
     <string name="more_options">Más opciones</string>
+    <string name="ptz_set_home">Marcar posición actual como inicio</string>
+    <string name="ptz_set_privacy">Marcar posición actual como posición de privacidad</string>
+    <string name="ptz_set_home_done">Posición de inicio guardada</string>
+    <string name="ptz_set_privacy_done">Posición de privacidad guardada</string>
+    <string name="error_ptz_position">No se pudo leer la posición de la cámara</string>
+    <string name="error_camera_config">No se pudo cargar la configuración de la cámara</string>
+    <string name="error_save_position">No se pudo guardar la posición</string>
     <string name="mute">Silenciar</string>
+    <string name="unmute">Quitar silencio</string>
     <string name="recalibrate_position">Recalibrar la posición…</string>
     <string name="cameras">Cámaras</string>
     <string name="cameras_empty">No hay cámaras disponibles</string>
@@ -46,11 +55,19 @@
     <string name="error_get_recordings">No se pudieron obtener las grabaciones de la cámara</string>
     <string name="error_network">Sin conexión a la red</string>
     <string name="error_unauthorized">Usuario o contraseña inválidos</string>
+    <string name="error_forbidden">No tienes permiso para esta acción</string>
+    <string name="session_expired">Tu sesión venció. Inicia sesión de nuevo.</string>
     <string name="error_server">El servidor informó un error</string>
     <string name="error_unexpected">Error inesperado</string>
     <string name="retry">Reintentar</string>
+    <!-- Inicio: no se pudo validar la sesión guardada por un problema del servidor. -->
+    <string name="splash_server_unreachable">No se pudo contactar con el servidor</string>
+    <string name="splash_server_unreachable_message">%1$s no responde. Comprueba la conexión y que el servidor esté en línea; luego vuelve a intentarlo.</string>
+    <string name="splash_server_error">El servidor no está disponible</string>
+    <string name="splash_server_error_message">%1$s respondió con un error. Vuelve a intentarlo en unos instantes.</string>
     <string name="there_is_no_recording">No hay grabación</string>
     <string name="playback_reached_end">Fin de las grabaciones disponibles</string>
+    <string name="playback_audio_only">Solo audio — esta parte de la grabación no tiene video</string>
     <string name="no_recordings">Sin grabaciones</string>
     <string name="events">Eventos</string>
     <string name="event_motion">Movimiento</string>
@@ -60,6 +77,29 @@
     <string name="logout">Cerrar sesión</string>
     <string name="logout_confirm_title">¿Cerrar sesión?</string>
     <string name="logout_confirm_message">Tendrás que ingresar tus credenciales nuevamente para volver a entrar.</string>
+    <!-- Bloqueo opcional de la app -->
+    <string name="app_lock">Bloqueo con huella o PIN</string>
+    <string name="app_lock_enabled">Bloqueo activado</string>
+    <string name="app_lock_disabled">Bloqueo desactivado</string>
+    <string name="app_lock_unavailable_title">No se puede activar el bloqueo</string>
+    <string name="app_lock_unavailable_message">Configura un bloqueo de pantalla (huella, rostro o PIN) en el dispositivo para usar esta función.</string>
+    <string name="lock_title">Eneverre está bloqueado</string>
+    <string name="lock_message">Usa tu huella o el desbloqueo del dispositivo para continuar.</string>
+    <string name="lock_unlock">Desbloquear</string>
+    <string name="lock_prompt_title">Desbloquear Eneverre</string>
+    <string name="lock_prompt_subtitle">Usa tu huella o el PIN del dispositivo</string>
+    <!-- Pantalla de ajustes -->
+    <string name="settings">Ajustes</string>
+    <string name="settings_security">Seguridad</string>
+    <string name="settings_account">Cuenta</string>
+    <string name="settings_app">Aplicación</string>
+    <string name="settings_app_lock_subtitle">Pide tu huella al volver a la app</string>
+    <string name="settings_change_password_subtitle">Elige una nueva contraseña</string>
+    <string name="settings_sessions_subtitle">Dispositivos con sesión iniciada</string>
+    <string name="settings_users_subtitle">Roles y acceso a las cámaras</string>
+    <string name="settings_footer">Servidor: %1$s\nVersión %2$s</string>
+    <string name="change_password_current_hint">Contraseña actual</string>
+    <string name="error_current_password_required">Ingresa tu contraseña actual</string>
     <string name="about_eneverre">Acerca de Eneverre…</string>
     <string name="title_about">Acerca de Eneverre</string>
     <string name="about_description">Un cliente Android para eneverre-api, que consolida las transmisiones de cámaras de distintos fabricantes en una sola aplicación.</string>
@@ -106,7 +146,14 @@
     <string name="users_empty">No hay usuarios</string>
     <string name="user_role_admin">Administrador</string>
     <string name="user_role_user">Usuario</string>
-    <string name="user_role_admin_switch">Administrador</string>
+    <string name="user_role_viewer">Visualizador</string>
+    <string name="user_role_monitor">Monitoreo</string>
+    <string name="user_role_label">Rol</string>
+    <string name="user_cameras">Cámaras permitidas</string>
+    <string name="user_cameras_all">Todas las cámaras</string>
+    <string name="user_cameras_saved">Acceso a cámaras actualizado</string>
+    <string name="error_user_cameras">No se pudo cargar el acceso a las cámaras</string>
+    <string name="error_save_user_cameras">No se pudo guardar el acceso a las cámaras</string>
     <!-- %1$s = nombre completo, %2$s = rol -->
     <string name="user_subtitle">%1$s · %2$s</string>
     <string name="first_name_hint">Nombre</string>
@@ -161,4 +208,45 @@
     <string name="talk_camera_volume">Volumen de la cámara</string>
     <string name="talk_title">Audio bidireccional</string>
     <string name="talk_close">Cerrar</string>
+    <!-- Ajustes de cámara (administrador) -->
+    <string name="camera_settings_title">Ajustes de cámara</string>
+    <!-- %1$s = hora de la última lectura de la instantánea -->
+    <string name="camera_settings_updated">Actualizado a las %1$s</string>
+    <string name="camera_settings_unavailable">Los ajustes de la cámara no están disponibles</string>
+    <string name="camera_settings_load_failed">No se pudieron cargar los ajustes de la cámara</string>
+    <string name="camera_settings_update_failed">No se pudieron actualizar los ajustes de la cámara</string>
+    <string name="camera_settings_section_daynight">Modo día/noche</string>
+    <string name="camera_settings_section_light">Iluminación</string>
+    <string name="camera_settings_section_audio">Audio</string>
+    <string name="camera_settings_section_motion">Movimiento</string>
+    <string name="camera_settings_section_ptz">PTZ</string>
+    <string name="camera_settings_mode_auto">Auto</string>
+    <string name="camera_settings_mode_day">Día</string>
+    <string name="camera_settings_mode_night">Noche</string>
+    <string name="camera_settings_mode_manual">Manual</string>
+    <string name="camera_settings_ircut">Filtro de corte IR</string>
+    <string name="camera_settings_ir850">IR 850 nm</string>
+    <string name="camera_settings_ir940">IR 940 nm</string>
+    <string name="camera_settings_white">Luz blanca</string>
+    <string name="camera_settings_mic">Micrófono</string>
+    <string name="camera_settings_speaker">Altavoz</string>
+    <string name="camera_settings_motion">Detección de movimiento</string>
+
+    <!-- Cuentas solo de monitoreo -->
+    <string name="monitor_message">Esta cuenta es solo de monitoreo: puede consultar el estado y las métricas del servidor, pero no las cámaras.</string>
+    <string name="monitor_server">Servidor</string>
+    <string name="monitor_uptime">Actividad</string>
+    <string name="monitor_cameras">Cámaras conectadas</string>
+    <string name="monitor_cameras_value">%1$d / %2$d</string>
+    <string name="monitor_recording">Grabación</string>
+    <string name="monitor_recording_on">Activada (%1$d cámaras)</string>
+    <string name="monitor_storage">Almacenamiento</string>
+    <string name="monitor_storage_value">%1$s libres de %2$s</string>
+    <string name="monitor_storage_unknown">Sin datos</string>
+    <string name="monitor_value_unknown">—</string>
+    <string name="monitor_unavailable">No se pudo leer el estado del servidor</string>
+    <string name="refresh">Actualizar</string>
+    <string name="on">Activado</string>
+    <string name="off">Desactivado</string>
+    <string name="error_camera_unavailable">Esta cámara ya no está disponible</string>
 </resources>

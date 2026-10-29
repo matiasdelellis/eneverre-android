@@ -41,4 +41,18 @@ public class AppPreferences {
     public boolean isMosaicFitToScreen() {
         return prefs.getBoolean(KEY_MOSAIC_FIT_TO_SCREEN, false);
     }
+
+    /**
+     * Whether the app asks for the device's biometric/credential unlock when it
+     * comes back to the foreground (and on a cold start). Opt-in: off by default.
+     */
+    private static final String KEY_APP_LOCK = "app_lock";
+
+    public void setAppLockEnabled(boolean enabled) {
+        prefs.edit().putBoolean(KEY_APP_LOCK, enabled).apply();
+    }
+
+    public boolean isAppLockEnabled() {
+        return prefs.getBoolean(KEY_APP_LOCK, false);
+    }
 }

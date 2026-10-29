@@ -4,6 +4,8 @@ import android.content.Context;
 import android.util.Log;
 import android.widget.Toast;
 
+import ar.com.delellis.eneverre.api.auth.AuthPaths;
+
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -42,10 +44,20 @@ public abstract class ApiCallback<T> implements Callback<T> {
     public final void onResponse(Call<T> call, Response<T> response) {
         if (response.isSuccessful()) {
             onSuccess(response.body());
-        } else {
-            Log.e(TAG, "HTTP error " + response.code() + " for " + call.request().url());
-            onError(response.code(), ApiError.message(context, response.code()));
+            return;
         }
+        // A 401 on anything but the token-minting endpoints means the session is
+        // dead (the refresh token expired or was revoked), not that this one
+        // command failed: recover the same way everywhere instead of leaving the
+        // screen on data that can no longer refresh. The login request itself
+        // answers 401 for bad credentials and must keep its own error path.
+        if (response.code() == 401 && !AuthPaths.isAuthEndpoint(call.request())) {
+            Log.w(TAG, "Session rejected by the server for " + call.request().url());
+            SessionExpiry.expire();
+            return;
+        }
+        Log.e(TAG, "HTTP error " + response.code() + " for " + call.request().url());
+        onError(response.code(), ApiError.message(context, response.code()));
     }
 
     @Override

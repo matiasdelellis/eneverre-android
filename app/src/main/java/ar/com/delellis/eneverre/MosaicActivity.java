@@ -16,6 +16,7 @@ import ar.com.delellis.eneverre.adapter.MosaicPagerAdapter;
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.model.Locations;
 import ar.com.delellis.eneverre.util.AppPreferences;
+import ar.com.delellis.eneverre.util.SystemBars;
 
 /**
  * Hosts a {@link ViewPager2} of {@link MosaicFragment}s — one live camera grid
@@ -102,10 +103,14 @@ public class MosaicActivity extends AppCompatActivity implements MosaicHost {
         }
     }
 
-    /** Hides the toolbar in landscape to give the grid the whole screen. */
+    /**
+     * Hides the toolbar and the system bars in landscape so the grid gets the
+     * whole display, and restores them in portrait where the chrome is needed.
+     */
     private void updateToolbarForOrientation(int orientation) {
         boolean landscape = orientation == Configuration.ORIENTATION_LANDSCAPE;
         findViewById(R.id.app_bar).setVisibility(landscape ? View.GONE : View.VISIBLE);
+        SystemBars.setHidden(this, landscape);
     }
 
     @Override

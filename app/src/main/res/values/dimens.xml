@@ -2,4 +2,14 @@
     <!-- Default screen margins, per the Android Design guidelines. -->
     <dimen name="activity_horizontal_margin">16dp</dimen>
     <dimen name="activity_vertical_margin">16dp</dimen>
+
+    <!-- Gap between the PTZ pad buttons. Kept small on phones so the pad
+         (centered in the space below the video) doesn't collide with the
+         snapshot/record/talk FAB column on the right edge of narrow screens
+         (e.g. 360dp-wide phones); tablets get the roomier 25dp back. -->
+    <dimen name="ptz_pad_gap">14dp</dimen>
+
+    <!-- Gap above the splash logo. Landscape frees vertical room for the error
+         panel, which must be visible without scrolling on short screens. -->
+    <dimen name="splash_logo_margin_top">140dp</dimen>
 </resources>
