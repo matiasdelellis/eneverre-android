@@ -55,7 +55,7 @@ import ar.com.delellis.eneverre.api.model.Event;
 import ar.com.delellis.eneverre.api.model.EventsResponse;
 import ar.com.delellis.eneverre.api.model.Recording;
 import ar.com.delellis.eneverre.api.model.RecordingsTimeline;
-import ar.com.delellis.eneverre.player.GaplessPlaybackController;
+import ar.com.delellis.eneverre.player.HlsPlaybackController;
 import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
 import ar.com.delellis.eneverre.util.AppPreferences;
@@ -84,7 +84,7 @@ public class PlaybackFragment extends Fragment {
 
     private View root;
 
-    private GaplessPlaybackController controller = null;
+    private HlsPlaybackController controller = null;
     private PlayerView playerView = null;
 
     /** Moment to start playing once recordings finish loading (swipe-in resume). */
@@ -116,6 +116,12 @@ public class PlaybackFragment extends Fragment {
     private long recordingsEndMs = -1L;
 
     private long startRecord = -1;
+
+    /**
+     * Moment "go to date and time" asked for, waiting for the recordings around
+     * it to load. -1 when no jump is pending.
+     */
+    private long pendingJumpMs = -1L;
 
     /** True only while this page is the resumed (visible) one, so neighbour pages don't play. */
     private boolean viewResumed = false;
@@ -212,12 +218,16 @@ public class PlaybackFragment extends Fragment {
         });
         playerView.setOnTouchListener(touchListener);
 
-        controller = new GaplessPlaybackController(requireContext(),
-                ApiClient.getInstance().getAuthorizationHeader(), currentCamera.getId(),
-                new GaplessPlaybackController.Listener() {
+        controller = new HlsPlaybackController(requireContext(), currentCamera.getId(),
+                new HlsPlaybackController.Listener() {
                     @Override
                     public void onBuffering(boolean buffering) {
                         root.findViewById(R.id.loading_progress).setVisibility(buffering ? VISIBLE : GONE);
+                        if (!buffering) {
+                            // The player just became ready: refresh the pause/play
+                            // icon, which was prepared while it was still loading.
+                            requireActivity().invalidateOptionsMenu();
+                        }
                     }
 
                     @Override
@@ -260,6 +270,7 @@ public class PlaybackFragment extends Fragment {
                     public void onPlaybackEnded() {
                         if (viewGone()) return;
                         root.findViewById(R.id.loading_progress).setVisibility(GONE);
+                        root.findViewById(R.id.no_video_overlay).setVisibility(GONE);
                         // Footage ran out: stop advancing and reflect it in the menu
                         // icon (which otherwise stays on "pause", implying it plays).
                         if (controller != null) {
@@ -267,6 +278,12 @@ public class PlaybackFragment extends Fragment {
                         }
                         requireActivity().invalidateOptionsMenu();
                         Snackbar.make(root, R.string.playback_reached_end, Snackbar.LENGTH_SHORT).show();
+                    }
+
+                    @Override
+                    public void onVideoMissing(boolean missing) {
+                        if (viewGone()) return;
+                        root.findViewById(R.id.no_video_overlay).setVisibility(missing ? VISIBLE : GONE);
                     }
                 });
 
@@ -319,12 +336,15 @@ public class PlaybackFragment extends Fragment {
             @Override
             public void onTimeSelected(long l, @Nullable TimeRecord timeRecord) {
                 Log.i(TAG, "onTimeSelected: " + Time.MStoFriendlyURL(l));
+                // Clear the latch first: releasing over a gap between recordings
+                // returns a null record, and returning without this left the
+                // timeline ignoring playback progress for the rest of the session.
+                timelineSelecting = false;
                 if (timeRecord == null) {
                     Toast.makeText(requireContext(), R.string.there_is_no_recording, LENGTH_LONG).show();
                     return;
                 }
 
-                timelineSelecting = false;
                 lastTimeSelected = l;
                 setSharedPlaybackTime(l);
                 syncEventHighlight();
@@ -471,10 +491,13 @@ public class PlaybackFragment extends Fragment {
             }
             // Recordings may not be loaded yet on a fresh swipe-in; if so defer
             // playback until getRecordings() finishes (see pendingSeekMs).
-            if (hasBackgroundRecords()) {
-                playFrom(seek);
-            } else {
+            if (!hasBackgroundRecords()) {
                 pendingSeekMs = seek;
+            } else if (!controller.isPlaying()) {
+                // A seek may already have started this window while the resume was
+                // being dispatched; restarting it would re-request its first
+                // segments (the duplicate segment.m4s seen in the logs).
+                playFrom(seek);
             }
         }
     }
@@ -586,11 +609,10 @@ public class PlaybackFragment extends Fragment {
                 DateTimePickerDialog.show(requireContext(), calendar -> {
                     timelineSelecting = false;
                     lastTimeSelected = calendar.getTimeInMillis();
-                    timelineView.setCurrent(lastTimeSelected);
-                    timelineView.invalidate();
                     syncEventHighlight();
-
-                    playFrom(lastTimeSelected);
+                    // Loads the recordings around that moment when the timeline
+                    // does not cover it yet (see jumpTo).
+                    jumpTo(lastTimeSelected);
                 });
                 return true;
             } else if (itemId == R.id.share_moment) {
@@ -647,9 +669,10 @@ public class PlaybackFragment extends Fragment {
     }
 
     /**
-     * Starts gapless playback from {@code timeMs} over the loaded recordings. The
-     * {@link GaplessPlaybackController} owns the chunk planning and queueing; here
-     * we only feed it the recordings and report when there's nothing to play.
+     * Starts playback from {@code timeMs} over the loaded recordings. The
+     * {@link HlsPlaybackController} builds the HLS window and maps the player
+     * position back to wall-clock; here we only feed it the segments and report
+     * when there is nothing to play.
      */
     private void playFrom(long timeMs) {
         // Never play from a non-visible page (a neighbour in the pager).
@@ -663,6 +686,50 @@ public class PlaybackFragment extends Fragment {
         if (!controller.playFrom(records, timeMs)) {
             Toast.makeText(requireContext(), R.string.there_is_no_recording, LENGTH_LONG).show();
         }
+    }
+
+    /**
+     * Moves playback to {@code targetMs}, loading the recordings around it first
+     * when the timeline does not cover that moment yet. "Go to date and time"
+     * used to look only at the loaded 24 h window, so jumping to yesterday
+     * silently reported "there is no recording".
+     */
+    private void jumpTo(long targetMs) {
+        if (timelineView == null) {
+            return;
+        }
+
+        ArrayList<TimeRecord> loaded = timelineView.getBackgroundRecords();
+        if (loaded != null && !loaded.isEmpty()) {
+            long first = loaded.get(0).timestampMsec;
+            TimeRecord newest = loaded.get(loaded.size() - 1);
+            long last = newest.timestampMsec + newest.durationMsec;
+            if (targetMs >= first && targetMs <= last) {
+                // Already loaded: just seek and play.
+                timelineView.setCurrent(targetMs);
+                timelineView.invalidate();
+                playFrom(targetMs);
+                return;
+            }
+        }
+
+        // Load a day around the target, clamped to the recorded extent so we
+        // never ask for history the camera does not have.
+        long windowStart = targetMs - 12 * 60 * 60 * 1000L;
+        long windowEnd = targetMs + 12 * 60 * 60 * 1000L;
+        if (recordingsStartMs > 0 && windowStart < recordingsStartMs) {
+            windowStart = recordingsStartMs;
+        }
+        if (recordingsEndMs > 0 && windowEnd > recordingsEndMs) {
+            windowEnd = recordingsEndMs;
+        }
+        if (windowEnd <= windowStart) {
+            Toast.makeText(requireContext(), R.string.there_is_no_recording, LENGTH_LONG).show();
+            return;
+        }
+
+        pendingJumpMs = targetMs;
+        getRecordings(windowStart, windowEnd, targetMs);
     }
 
     private void downloadPlayback(String startRFC333, double duration) {
@@ -699,6 +766,7 @@ public class PlaybackFragment extends Fragment {
                 if (viewGone()) return;
                 recordings = body;
                 if (recordings == null || recordings.isEmpty()) {
+                    pendingJumpMs = -1L;
                     Toast.makeText(requireContext(), R.string.there_is_no_recording, LENGTH_LONG).show();
                     return;
                 }
@@ -713,13 +781,25 @@ public class PlaybackFragment extends Fragment {
                     timeRecord = new TimeRecord(startMs, durationMs, recording);
                     recordsBackgroundEvents.add(timeRecord);
                 }
-                timelineView.addBackgroundRecordsAtStart(recordsBackgroundEvents);
+                // Merge rather than prepend: a jump can load a window that is not
+                // older than the loaded one, and overlapping pages share a boundary.
+                timelineView.addBackgroundRecords(recordsBackgroundEvents);
 
-                Recording firstRecording = recordings.get(0);
-                lastOldRecording = Time.RFC3339toMS(firstRecording.getStart());
+                // The merged list is sorted, so its first element is the oldest
+                // recording loaded from either direction.
+                ArrayList<TimeRecord> loaded = timelineView.getBackgroundRecords();
+                lastOldRecording = loaded.isEmpty() ? -1L : loaded.get(0).timestampMsec;
 
                 if (selectTime > 0) {
                     timelineView.setCurrent(selectTime);
+                }
+
+                // A "go to date and time" jump was waiting for these recordings.
+                if (pendingJumpMs > 0 && viewResumed) {
+                    long jump = pendingJumpMs;
+                    pendingJumpMs = -1L;
+                    playFrom(jump);
+                    return;
                 }
 
                 // Recordings are now loaded: honour a playback request that
@@ -734,6 +814,7 @@ public class PlaybackFragment extends Fragment {
             @Override
             public void onError(int httpCode, String message) {
                 if (viewGone()) return;
+                pendingJumpMs = -1L;
                 Toast.makeText(requireContext(), R.string.error_get_recordings, LENGTH_LONG).show();
             }
         });

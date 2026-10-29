@@ -6,20 +6,25 @@ import android.os.Looper;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
+import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
+import androidx.media3.common.TrackSelectionParameters;
 import androidx.media3.common.util.UnstableApi;
-import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.datasource.HttpDataSource;
+import androidx.media3.datasource.okhttp.OkHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
 import androidx.media3.ui.PlayerView;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import ar.com.delellis.eneverre.api.ApiClient;
+import okhttp3.OkHttpClient;
 
 /**
  * Thin ExoPlayer (Media3) wrapper for <b>recording playback</b>. Live RTSP is
@@ -32,8 +37,13 @@ import java.util.Map;
  * and transitions into it without tearing down the pipeline, so consecutive
  * recordings play back <b>gapless</b>.
  *
- * <p>Credentials are sent via the {@code Authorization} header on the HTTP
- * data source (not inline in the URL), so URLs are safe to build/log.
+ * <p>Playback goes through the app's OkHttp client, so the Bearer token is
+ * stamped per request by {@code BearerInterceptor} — a rotated token is picked
+ * up without recreating the player — and a 401 is refreshed and retried by
+ * {@code TokenAuthenticator}. OkHttp also drops the {@code Authorization} header
+ * when a redirect changes host, port or scheme, which the default Media3 data
+ * source does not do (it replays its default request properties to the redirect
+ * target). URLs stay free of inline credentials.
  */
 @OptIn(markerClass = UnstableApi.class)
 public class Media3Player {
@@ -46,8 +56,6 @@ public class Media3Player {
         void onBuffering(boolean buffering);
         /** Current playlist item + position within it (poll-driven). */
         void onProgress(int itemIndex, long positionMs);
-        /** Playback advanced to a new playlist item (gapless boundary). */
-        void onItemTransition(int itemIndex);
         /** Reached the end of the whole playlist. */
         void onEnded();
         /**
@@ -57,12 +65,21 @@ public class Media3Player {
          * timestamp).
          */
         void onError(int httpCode, @Nullable String nextAvailable, @Nullable String message);
+
     }
 
     private final ExoPlayer player;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Listener listener = null;
     private float volume = 1.0f;
+
+    /**
+     * Presentation time (µs) of the last video frame handed to the renderer, or
+     * -1 when the current playlist has not rendered one. Recordings whose video
+     * stalled while the audio kept going have long stretches with no video at
+     * all; the UI uses this to warn instead of showing a black picture.
+     */
+    private volatile long lastVideoFrameUs = -1;
 
     private final Runnable progressTick = new Runnable() {
         @Override
@@ -74,19 +91,18 @@ public class Media3Player {
         }
     };
 
-    public Media3Player(Context context, @Nullable String authorizationHeader) {
-        Map<String, String> headers = new HashMap<>();
-        if (authorizationHeader != null) {
-            headers.put("Authorization", authorizationHeader);
-        }
-        DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
-                .setAllowCrossProtocolRedirects(true)
-                // The backend assembles each window on demand and can be slow to
-                // respond to a freshly-seeked position; the 8s default times out too
-                // eagerly while scrubbing.
-                .setConnectTimeoutMs(15_000)
-                .setReadTimeoutMs(15_000)
-                .setDefaultRequestProperties(headers);
+    public Media3Player(Context context) {
+        // Share the app's OkHttp client: BearerInterceptor stamps the token per
+        // request (so a rotation is picked up mid-session), TokenAuthenticator
+        // refreshes on a 401, and OkHttp strips the header on a cross-host
+        // redirect. The backend assembles each window on demand and can be slow
+        // to answer a freshly-seeked position, so the timeouts are wider than
+        // the client defaults.
+        OkHttpClient client = ApiClient.getInstance().getHttpClient().newBuilder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .build();
+        OkHttpDataSource.Factory httpFactory = new OkHttpDataSource.Factory(client);
 
         // Keep ExoPlayer's own load retries low: a 502 here usually means a real
         // recording gap, so the controller's recovery (probe forward / skip) should
@@ -97,6 +113,11 @@ public class Media3Player {
         player = new ExoPlayer.Builder(context)
                 .setMediaSourceFactory(mediaSourceFactory)
                 .build();
+
+        // Fires for every frame actually handed to the video renderer. The
+        // presentation time is in the same timeline as getCurrentPosition().
+        player.setVideoFrameMetadataListener((presentationTimeUs, releaseTimeNs, format, mediaFormat) ->
+                lastVideoFrameUs = presentationTimeUs);
 
         player.addListener(new Player.Listener() {
             @Override
@@ -109,13 +130,6 @@ public class Media3Player {
                 } else if (state == Player.STATE_ENDED) {
                     listener.onBuffering(false);
                     listener.onEnded();
-                }
-            }
-
-            @Override
-            public void onMediaItemTransition(@Nullable MediaItem mediaItem, int reason) {
-                if (listener != null) {
-                    listener.onItemTransition(player.getCurrentMediaItemIndex());
                 }
             }
 
@@ -174,64 +188,56 @@ public class Media3Player {
      * The remaining items play gapless after it.
      */
     public void setPlaylist(List<MediaItem> items, int startIndex, long startPositionMs) {
+        // A new window starts without having rendered anything yet.
+        lastVideoFrameUs = -1;
         player.setMediaItems(items, startIndex, startPositionMs);
         player.prepare();
         player.setPlayWhenReady(true);
         startProgress();
     }
 
-    /** Appends more items to the end of the current playlist (gapless continuation). */
-    public void addMediaItems(List<MediaItem> items) {
-        player.addMediaItems(items);
-    }
-
-    /**
-     * Advances into the next item and resumes, if there is one. Used to recover
-     * from {@code STATE_ENDED} after more items were appended, since ExoPlayer
-     * stays ended (frozen on the last frame) until told to move on.
-     */
-    public void continueToNextIfAvailable() {
-        if (player.hasNextMediaItem()) {
-            player.seekToNextMediaItem();
-            player.play();
-        }
-    }
-
-    public int getCurrentIndex() {
-        return player.getCurrentMediaItemIndex();
-    }
-
-    /** Replaces the item at {@code index} (e.g. to rebuild a chunk from a new start). */
-    public void replaceItem(int index, MediaItem item) {
-        player.replaceMediaItem(index, item);
-    }
-
-    /** Drops every item after {@code index} (used when the plan past it is rebuilt). */
-    public void removeAfter(int index) {
-        int count = player.getMediaItemCount();
-        if (index + 1 < count) {
-            player.removeMediaItems(index + 1, count);
-        }
-    }
-
-    /**
-     * Jumps to the given playlist item (start of it) and resumes playing,
-     * recovering the player if it was left in an error/idle state.
-     */
-    public void seekToItem(int index) {
-        player.seekTo(index, 0);
-        player.prepare(); // required to leave STATE_IDLE after an error
-        player.play();
-    }
-
     public void stop() {
         stopProgress();
         player.stop();
         player.clearMediaItems();
+        // stop() leaves playWhenReady alone, which made isPaused() report a
+        // player with no playlist as "playing".
+        player.setPlayWhenReady(false);
+        lastVideoFrameUs = -1;
+    }
+
+    /** Presentation time (µs) of the last rendered video frame, or -1 if none yet. */
+    public long getLastVideoFrameUs() {
+        return lastVideoFrameUs;
+    }
+
+    /**
+     * Drops the video track so a recording whose video is missing (the camera
+     * stalled it while audio kept going) can still play its audio instead of
+     * sitting in buffering forever waiting for a frame that will never come.
+     */
+    public void disableVideo() {
+        player.setTrackSelectionParameters(player.getTrackSelectionParameters()
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
+                .build());
+    }
+
+    /** Re-enables the video track (a new window may have it). */
+    public void enableVideo() {
+        player.setTrackSelectionParameters(player.getTrackSelectionParameters()
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false)
+                .build());
     }
 
     public boolean isPaused() {
         return !player.getPlayWhenReady();
+    }
+
+    /** Whether the player is actually playing (not paused, buffering or empty). */
+    public boolean isPlaying() {
+        return player.isPlaying();
     }
 
     public void pause() {

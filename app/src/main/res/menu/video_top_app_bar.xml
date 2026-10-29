@@ -3,9 +3,9 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
-        android:id="@+id/privacy_action"
-        android:icon="@drawable/ic_privacy_24"
-        android:title="@string/enter_privacy_mode"
+        android:id="@+id/volume_action"
+        android:icon="@drawable/ic_volume_24"
+        android:title="@string/mute"
         app:showAsAction="ifRoom" />
 
     <item
@@ -15,14 +15,15 @@
         app:showAsAction="ifRoom" />
 
     <item
-        android:id="@+id/volume_action"
-        android:icon="@drawable/ic_volume_24"
-        android:title="@string/mute"
+        android:id="@+id/privacy_action"
+        android:icon="@drawable/ic_privacy_24"
+        android:title="@string/enter_privacy_mode"
         app:showAsAction="ifRoom" />
 
     <item
-        android:id="@+id/recalibrate_ptz"
-        android:title="@string/recalibrate_position"
-        app:showAsAction="never" />
+        android:id="@+id/camera_settings"
+        android:icon="@drawable/ic_settings_24"
+        android:title="@string/camera_settings_title"
+        app:showAsAction="ifRoom" />
 
 </menu>

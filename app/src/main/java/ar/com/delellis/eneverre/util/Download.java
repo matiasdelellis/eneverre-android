@@ -57,8 +57,31 @@ public class Download {
         void writeTo(OutputStream out) throws IOException;
     }
 
+    /**
+     * Builds a file name from server-supplied parts. The camera name/id come from
+     * the backend, so they are sanitized: a camera named {@code ../../x} must not
+     * escape the downloads folder on API 24-28, nor make MediaStore reject the
+     * insert on API 29+ (a display name with a path separator throws).
+     */
     public static String buildFileName(String prefix, String dateTime, String extension) {
-        return prefix + "_" + dateTime + "." + extension;
+        return safeSegment(prefix, "camera") + "_" + safeSegment(dateTime, "clip") + "." + extension;
+    }
+
+    /**
+     * Reduces {@code value} to one path-safe segment: letters, digits, dot, dash
+     * and underscore, runs collapsed and length capped. {@code "."} and
+     * {@code ".."} are directory references, never file names.
+     */
+    private static String safeSegment(String value, String fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        String cleaned = value.trim().replaceAll("[^\\p{L}\\p{N}._-]+", "_");
+        cleaned = cleaned.replaceAll("_+", "_");
+        if (cleaned.isEmpty() || cleaned.equals(".") || cleaned.equals("..")) {
+            return fallback;
+        }
+        return cleaned.length() > 64 ? cleaned.substring(0, 64) : cleaned;
     }
 
     /**
@@ -72,7 +95,7 @@ public class Download {
                 Uri uri = save(activity, fileName, "image/png",
                         out -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, out));
                 postPreview(activity, uri, "image/png", cameraName, bitmap, -1);
-            } catch (IOException e) {
+            } catch (IOException | SecurityException e) {
                 postError(activity, R.string.error_snapshot);
             }
         });
@@ -90,7 +113,7 @@ public class Download {
             try (ResponseBody closeable = body; InputStream in = closeable.byteStream()) {
                 Uri uri = save(activity, fileName, "video/mp4", out -> copy(in, out));
                 postPreview(activity, uri, "video/mp4", cameraName, preview, durationSeconds);
-            } catch (IOException e) {
+            } catch (IOException | SecurityException e) {
                 postError(activity, R.string.error_download);
             }
         });
@@ -138,7 +161,13 @@ public class Download {
                 Environment.DIRECTORY_DOWNLOADS + "/" + SUBDIR);
         values.put(MediaStore.MediaColumns.IS_PENDING, 1);
 
-        Uri item = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+        Uri item;
+        try {
+            item = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+        } catch (IllegalArgumentException e) {
+            // MediaStore rejects a display name containing a path separator.
+            throw new IOException("Invalid file name: " + fileName, e);
+        }
         if (item == null) {
             throw new IOException("MediaStore returned no URI for " + fileName);
         }
@@ -169,6 +198,11 @@ public class Download {
         folder.mkdirs();
 
         File file = new File(folder, fileName);
+        // Defence in depth: even a sanitized name must resolve inside the folder.
+        String folderPath = folder.getCanonicalPath();
+        if (!file.getCanonicalPath().startsWith(folderPath + File.separator)) {
+            throw new IOException("Refusing to write outside " + folderPath + ": " + fileName);
+        }
         try (OutputStream out = new java.io.BufferedOutputStream(new java.io.FileOutputStream(file))) {
             writer.writeTo(out);
         }

@@ -8,6 +8,7 @@ import static android.widget.Toast.LENGTH_SHORT;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
@@ -45,11 +46,13 @@ import java.util.List;
 
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.ApiService;
+import ar.com.delellis.eneverre.api.CameraRefresher;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.player.RtspPlayerView;
 import ar.com.delellis.eneverre.talk.TalkClient;
 import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
+import ar.com.delellis.eneverre.util.SecureStore;
 import ar.com.delellis.eneverre.util.StoragePermission;
 import ar.com.delellis.eneverre.util.VideoLayout;
 import ar.com.delellis.eneverre.util.AppPreferences;
@@ -85,11 +88,19 @@ public class LiveViewFragment extends Fragment {
     private Camera currentCamera;
 
     /**
-     * Guards the one-shot RTSP-credential refresh: the live URL embeds rotating
-     * credentials, so a connect failure may just mean they rolled over. We refetch
-     * the camera list and retry once before surfacing the reconnect button.
+     * Guards the one-shot error-driven refresh: the live URL carries a signed
+     * path token that the server rejects once it expires, so a connect failure
+     * may just mean the token is old. We refetch the camera list and retry
+     * once before surfacing the reconnect button.
      */
     private boolean rtspRefreshAttempted = false;
+
+    /**
+     * Guards the proactive refresh done before starting a stream whose token is
+     * missing or about to expire, so a device clock that runs ahead cannot turn
+     * it into a request loop. Reset once a stream plays.
+     */
+    private boolean proactiveRefreshAttempted = false;
 
     private ApiService apiService = null;
 
@@ -126,16 +137,21 @@ public class LiveViewFragment extends Fragment {
         @Override
         public void onPrepareMenu(@NonNull Menu menu) {
             boolean privacy = currentCamera.getPrivacy();
+            // Viewer and monitor accounts may not operate a camera: PTZ, privacy
+            // and talk are operator capabilities (admin/user only).
+            boolean canOperate = SecureStore.getInstance().canOperate();
             // The privacy toggle is offered only on cameras that support it.
-            menu.findItem(R.id.privacy_action).setVisible(currentCamera.hasPrivacy() && !privacy);
+            menu.findItem(R.id.privacy_action).setVisible(canOperate && currentCamera.hasPrivacy() && !privacy);
+            // Live-settings editing is admin-only (the endpoints are also
+            // enforced server-side) and only for cameras advertising it.
+            menu.findItem(R.id.camera_settings).setVisible(
+                    SecureStore.getInstance().isAdmin() && currentCamera.hasSettings() && !privacy);
             // Hide PiP where it isn't available (API < 26 or no PiP feature), so it
             // can't be tapped into a no-op / crash on unsupported devices.
             boolean pipSupported = ((ViewActivity) requireActivity()).isPipSupported();
             menu.findItem(R.id.pip_action).setVisible(!privacy && pipSupported);
             menu.findItem(R.id.volume_action).setVisible(!privacy);
-            menu.findItem(R.id.recalibrate_ptz).setVisible(currentCamera.getPtz() && !privacy);
-            menu.findItem(R.id.volume_action).setIcon(
-                    prefs.isGlobalMute() ? R.drawable.ic_muted_24 : R.drawable.ic_volume_24);
+            applyMuteAction(menu.findItem(R.id.volume_action), prefs.isGlobalMute());
         }
 
         @Override
@@ -145,6 +161,11 @@ public class LiveViewFragment extends Fragment {
                 togglePrivacy(true);
                 stopLive();
                 return true;
+            } else if (itemId == R.id.camera_settings) {
+                Intent intent = new Intent(requireContext(), CameraSettingsActivity.class);
+                intent.putExtra(CameraSettingsActivity.EXTRA_CAMERA, currentCamera);
+                startActivity(intent);
+                return true;
             } else if (itemId == R.id.pip_action) {
                 ((ViewActivity) requireActivity()).enterPipMode(currentCamera, videoBounds());
                 return true;
@@ -152,12 +173,18 @@ public class LiveViewFragment extends Fragment {
                 boolean muted = !prefs.isGlobalMute();
                 setMuteLive(muted);
                 prefs.setGlobalMute(muted);
-                item.setIcon(muted ? R.drawable.ic_muted_24 : R.drawable.ic_volume_24);
+                applyMuteAction(item, muted);
                 return true;
             }
             return false;
         }
     };
+
+    /** Sets the mute action's icon and label to match the current mute state. */
+    private void applyMuteAction(MenuItem item, boolean muted) {
+        item.setIcon(muted ? R.drawable.ic_muted_24 : R.drawable.ic_volume_24);
+        item.setTitle(muted ? R.string.unmute : R.string.mute);
+    }
 
     public LiveViewFragment() {
         // Required empty public constructor
@@ -235,8 +262,10 @@ public class LiveViewFragment extends Fragment {
         int orientation = getResources().getConfiguration().orientation;
         setOrientationLayout(orientation);
 
+        boolean canOperate = SecureStore.getInstance().canOperate();
         view.findViewById(R.id.reconnect_button).setVisibility(GONE);
-        view.findViewById(R.id.exit_privacy_button).setVisibility(currentCamera.getPrivacy() ? VISIBLE : GONE);
+        view.findViewById(R.id.exit_privacy_button).setVisibility(
+                currentCamera.getPrivacy() && canOperate ? VISIBLE : GONE);
         view.findViewById(R.id.loading_progress).setVisibility(currentCamera.getPrivacy() ? GONE : VISIBLE);
 
         livePlayer = view.findViewById(R.id.live_video);
@@ -262,18 +291,20 @@ public class LiveViewFragment extends Fragment {
         videoFrame.setOnTouchListener(videoTouchListener);
 
         // PTZ controls stay on screen even when the camera lacks PTZ support, just
-        // disabled, so the live view doesn't look empty.
-        setPtzEnabled(currentCamera.getPtz());
+        // disabled, so the live view doesn't look empty. A role that cannot
+        // operate a camera (viewer) gets no controls at all (see
+        // updateControlRegionVisibility).
+        setPtzEnabled(canOperate && currentCamera.getPtz());
 
         view.findViewById(R.id.reconnect_button).setVisibility(GONE);
         view.findViewById(R.id.reconnect_button).setOnClickListener(v -> {
             view.findViewById(R.id.reconnect_button).setVisibility(GONE);
             // A manual reconnect gets its own shot at a credential refresh.
             rtspRefreshAttempted = false;
+            proactiveRefreshAttempted = false;
             startLive();
         });
 
-        view.findViewById(R.id.exit_privacy_button).setVisibility(GONE);
         view.findViewById(R.id.exit_privacy_button).setOnClickListener(v -> {
             togglePrivacy(false);
 
@@ -406,6 +437,9 @@ public class LiveViewFragment extends Fragment {
         // The player is part of the view being destroyed: don't keep it around.
         livePlayer = null;
         videoFrame = null;
+        // Also drop the root so viewGone() really reports callbacks that land
+        // between onDestroyView and onDetach as dead.
+        fragmentView = null;
         super.onDestroyView();
     }
 
@@ -478,14 +512,18 @@ public class LiveViewFragment extends Fragment {
             exitTalkMode();
         }
 
-        fragmentView.findViewById(R.id.exit_privacy_button).setVisibility(privacy ? VISIBLE : GONE);
+        // Leaving privacy is itself an operator action: a viewer sees the cover
+        // but cannot toggle the camera back on.
+        boolean canOperate = SecureStore.getInstance().canOperate();
+        fragmentView.findViewById(R.id.exit_privacy_button).setVisibility(
+                privacy && canOperate ? VISIBLE : GONE);
 
         // Black overlay hides the last (frozen) frame while privacy is on, instead
         // of blanking the VLC surface (that lockCanvas blank left the video narrow
         // when leaving privacy because it changed the surface buffer geometry).
         fragmentView.findViewById(R.id.privacy_cover).setVisibility(privacy ? VISIBLE : GONE);
 
-        setPtzEnabled(currentCamera.getPtz() && !privacy);
+        setPtzEnabled(canOperate && currentCamera.getPtz() && !privacy);
         updateTalkButtonVisibility();
 
         // Privacy hides the pip/volume/recalibrate actions — refresh the menu.
@@ -622,9 +660,10 @@ public class LiveViewFragment extends Fragment {
                 return;
             }
             fragmentView.findViewById(R.id.loading_progress).setVisibility(GONE);
-            // A clean connect means the current URL works; allow a fresh
-            // refresh attempt if it later drops.
+            // A clean connect means the current URL works; allow fresh
+            // refresh attempts if it later drops or its token expires.
             rtspRefreshAttempted = false;
+            proactiveRefreshAttempted = false;
         }
 
         @Override
@@ -634,11 +673,11 @@ public class LiveViewFragment extends Fragment {
             }
             fragmentView.findViewById(R.id.loading_progress).setVisibility(GONE);
             if (!rtspRefreshAttempted) {
-                // The RTSP credentials rotate, so a rejected (or dropped) stream
-                // may just mean they rolled over: refetch the camera list once
-                // for a fresh URL and retry before giving up.
+                // The signed path token may have expired on a connection that
+                // looked fresh: refetch the camera list once for a new URL and
+                // retry before giving up.
                 rtspRefreshAttempted = true;
-                refreshRtspAndRetry();
+                refreshRtspAndRestart(true);
             } else {
                 fragmentView.findViewById(R.id.reconnect_button).setVisibility(VISIBLE);
             }
@@ -651,43 +690,63 @@ public class LiveViewFragment extends Fragment {
         }
         // Fit from the camera's metadata; the decoder's own geometry refines it.
         livePlayer.setVideoAspect(currentCamera.getWidth(), currentCamera.getHeight());
+
         String videoUrl = currentCamera.getRtsp();
+        if (!proactiveRefreshAttempted && CameraRefresher.shouldRefreshBeforeStart(videoUrl)) {
+            // The URL carries a signed path token that is missing or about to
+            // expire: a new connection would be rejected, so fetch a fresh one
+            // first. One attempt per stream keeps a wrong device clock from
+            // turning this into a loop.
+            refreshRtspAndRestart(false);
+            return;
+        }
+        if (videoUrl == null || videoUrl.isEmpty()) {
+            // The server advertises no live feed for this camera: relay
+            // disabled, privacy on, or outside its recording schedule.
+            fragmentView.findViewById(R.id.loading_progress).setVisibility(GONE);
+            fragmentView.findViewById(R.id.reconnect_button).setVisibility(VISIBLE);
+            return;
+        }
         livePlayer.playUri(Uri.parse(videoUrl));
     }
 
     /**
-     * Refetches the camera list to pick up a fresh RTSP URL (its embedded
-     * credentials rotate), updates {@link #currentCamera} and retries playback.
-     * Falls back to the reconnect button if the list can't be fetched or the
-     * camera is gone.
+     * Refetches the camera list to pick up fresh signed RTSP path tokens,
+     * updates {@link #currentCamera} and restarts playback. Concurrent requests
+     * from other views are collapsed into one by {@link CameraRefresher}.
+     *
+     * @param reportFailure show the reconnect button when the list cannot be
+     *                      fetched. The error-driven retry does, since it has no
+     *                      other URL to fall back on; the proactive path just
+     *                      tries the URL it already had and lets the resulting
+     *                      401 drive the error path.
      */
-    private void refreshRtspAndRetry() {
-        apiService.cameras().enqueue(new ApiCallback<List<Camera>>(requireContext()) {
-            @Override
-            public void onSuccess(List<Camera> cameras) {
-                if (!isAdded() || livePlayer == null) {
+    private void refreshRtspAndRestart(boolean reportFailure) {
+        // Either way this is the one refresh this stream gets: a token that
+        // still looks expired afterwards must not trigger another request.
+        proactiveRefreshAttempted = true;
+
+        final String cameraId = currentCamera.getId();
+        CameraRefresher.refresh(cameras -> {
+            if (!isAdded() || livePlayer == null || fragmentView == null) {
+                return;
+            }
+            if (cameras == null) {
+                if (reportFailure) {
+                    fragmentView.findViewById(R.id.reconnect_button).setVisibility(VISIBLE);
                     return;
                 }
-                if (cameras != null) {
-                    for (Camera camera : cameras) {
-                        if (currentCamera.getId().equals(camera.getId())) {
-                            // Preserve the current privacy state the user may have toggled.
-                            camera.setPrivacy(currentCamera.getPrivacy());
-                            currentCamera = camera;
-                            break;
-                        }
+            } else {
+                for (Camera camera : cameras) {
+                    if (cameraId.equals(camera.getId())) {
+                        // Preserve the current privacy state the user may have toggled.
+                        camera.setPrivacy(currentCamera.getPrivacy());
+                        currentCamera = camera;
+                        break;
                     }
                 }
-                startLive();
             }
-
-            @Override
-            public void onError(int httpCode, String message) {
-                if (!isAdded() || fragmentView == null) {
-                    return;
-                }
-                fragmentView.findViewById(R.id.reconnect_button).setVisibility(VISIBLE);
-            }
+            startLive();
         });
     }
 
@@ -827,7 +886,8 @@ public class LiveViewFragment extends Fragment {
      */
     private void updateTalkButtonVisibility() {
         boolean pip = requireActivity().isInPictureInPictureMode();
-        boolean show = currentCamera.hasTalk() && !currentCamera.getPrivacy() && !talkMode && !pip;
+        boolean show = SecureStore.getInstance().canOperate()
+                && currentCamera.hasTalk() && !currentCamera.getPrivacy() && !talkMode && !pip;
         fragmentView.findViewById(R.id.talk_button).setVisibility(show ? VISIBLE : GONE);
     }
 
@@ -851,7 +911,10 @@ public class LiveViewFragment extends Fragment {
     private void updateControlRegionVisibility() {
         boolean portrait = getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT;
         boolean pip = requireActivity().isInPictureInPictureMode();
-        boolean showRegion = portrait && !pip;
+        // Viewer and monitor accounts get no PTZ/talk region: they may watch,
+        // but not operate the camera.
+        boolean canOperate = SecureStore.getInstance().canOperate();
+        boolean showRegion = canOperate && portrait && !pip;
         fragmentView.findViewById(R.id.ptz_buttons).setVisibility(showRegion && !talkMode ? VISIBLE : GONE);
         fragmentView.findViewById(R.id.talk_controls).setVisibility(showRegion && talkMode ? VISIBLE : GONE);
     }
@@ -948,7 +1011,17 @@ public class LiveViewFragment extends Fragment {
 
     /**
      * Callback for fire-and-forget commands (PTZ, privacy) whose response body is
-     * empty. Success needs no action; failures surface a message via {@link ApiCallback}.
+     * empty. Success needs no action; failures surface a message via
+     * {@link ApiCallback}, except for the two that say something about the
+     * account rather than the command:
+     * <ul>
+     *   <li>{@code 403} — the cached role no longer grants the capability (an
+     *       admin changed it mid-session): refresh the role and repaint, and only
+     *       show the error if the capability really is still there.</li>
+     *   <li>{@code 404} — the camera may have left this account's ACL, or been
+     *       deleted. The camera list is authoritative, so confirm there before
+     *       deciding between "operation unavailable" and "camera gone".</li>
+     * </ul>
      */
     private ApiCallback<Void> commandCallback() {
         return new ApiCallback<Void>(requireContext()) {
@@ -956,7 +1029,66 @@ public class LiveViewFragment extends Fragment {
             public void onSuccess(Void body) {
                 // Nothing to do: the command was accepted.
             }
+
+            @Override
+            public void onError(int httpCode, String message) {
+                if (viewGone()) {
+                    return;
+                }
+                if (httpCode == 403) {
+                    ApiClient.getInstance().refreshRole(() -> {
+                        if (viewGone()) {
+                            return;
+                        }
+                        applyRoleGating();
+                        if (SecureStore.getInstance().canOperate()) {
+                            Toast.makeText(requireContext(), message, LENGTH_LONG).show();
+                        }
+                    });
+                    return;
+                }
+                if (httpCode == 404) {
+                    checkCameraStillAvailable();
+                    return;
+                }
+                super.onError(httpCode, message);
+            }
         };
+    }
+
+    /** Re-applies the role-dependent controls after a server-side role change. */
+    private void applyRoleGating() {
+        if (fragmentView == null) {
+            return;
+        }
+        // applyPrivacyLayout already reconciles PTZ, talk and the menu for the
+        // current privacy state; it is idempotent and carries no server side
+        // effects (unlike togglePrivacy).
+        applyPrivacyLayout(currentCamera.getPrivacy());
+    }
+
+    /**
+     * A single-camera call answered 404. That can mean the camera left this
+     * account's ACL (or was deleted), or simply that the operation is not
+     * available on it. Only a fresh camera list can tell: if the camera is gone
+     * from it, close the view and let the list reload; otherwise report the
+     * operation as failed.
+     */
+    private void checkCameraStillAvailable() {
+        final String cameraId = currentCamera.getId();
+        CameraRefresher.refresh(cameras -> {
+            if (viewGone() || cameras == null) {
+                // Could not confirm either way: keep the view as it is.
+                return;
+            }
+            for (Camera camera : cameras) {
+                if (cameraId.equals(camera.getId())) {
+                    Toast.makeText(requireContext(), R.string.error_unexpected, LENGTH_SHORT).show();
+                    return;
+                }
+            }
+            ((ViewActivity) requireActivity()).onCameraUnavailable(currentCamera);
+        });
     }
 
     public interface OnPrivacyChangeListener {

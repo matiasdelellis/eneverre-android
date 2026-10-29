@@ -233,6 +233,9 @@ public class TimelineView extends View {
             case MotionEvent.ACTION_DOWN:
                 _isScaling = false;
                 removeCallbacks(_selectedRunnable);
+                // A new gesture owns its own selection delivery: invalidate the
+                // one a previous fling may still have pending.
+                _gestureListener.invalidateSelection();
                 // The timeline owns horizontal drags (scrubbing); stop an
                 // enclosing ViewPager2 from stealing them to change camera.
                 if (getParent() != null) {
@@ -247,9 +250,11 @@ public class TimelineView extends View {
                 if (!_isScaling) {
                     removeCallbacks(_selectingRunnable);
                     removeCallbacks(_selectedRunnable);
-
+                    final long token = _gestureListener.selectionToken();
                     post(() -> {
-                        if (!_isFlinging) {
+                        // A fling delivers from onAnimationEnd; the token makes
+                        // sure only one of the two paths reports the selection.
+                        if (!_isFlinging && token == _gestureListener.selectionToken()) {
                             _selectedRunnable.run();
                         }
                     });
@@ -311,6 +316,33 @@ public class TimelineView extends View {
         if (newRecords.isEmpty()) return;
 
        _recordsBackground.addAll(0, newRecords);
+        _needUpdate = true;
+        invalidate();
+    }
+
+    /**
+     * Adds records anywhere in the timeline, keeping it sorted by start and
+     * dropping duplicates. Unlike {@link #addBackgroundRecordsAtStart} this works
+     * for a window that is not strictly older than what is loaded — which is what
+     * jumping to an arbitrary date needs — and it also removes the duplicate that
+     * two overlapping 24 h pages leave at their boundary.
+     */
+    public void addBackgroundRecords(@NonNull ArrayList<TimeRecord> newRecords) {
+        if (newRecords.isEmpty()) return;
+
+        _recordsBackground.addAll(newRecords);
+        Collections.sort(_recordsBackground,
+                (a, b) -> Long.compare(a.timestampMsec, b.timestampMsec));
+
+        ArrayList<TimeRecord> merged = new ArrayList<>(_recordsBackground.size());
+        long lastStart = Long.MIN_VALUE;
+        for (TimeRecord record : _recordsBackground) {
+            if (record.timestampMsec != lastStart) {
+                merged.add(record);
+                lastStart = record.timestampMsec;
+            }
+        }
+        _recordsBackground = merged;
         _needUpdate = true;
         invalidate();
     }
@@ -638,6 +670,22 @@ public class TimelineView extends View {
         private boolean _waitForNextActionUp = false;
         private static final int FLING_MIN_VELOCITY_FACTOR = 6;
 
+        /**
+         * Identifies the gesture that owns the next selection delivery. A fling
+         * ends asynchronously, so the ACTION_UP post and the animation end can
+         * both be about to report the same selection; whoever runs first bumps
+         * the token and the other one is dropped.
+         */
+        private long _selectionToken = 0;
+
+        void invalidateSelection() {
+            _selectionToken++;
+        }
+
+        long selectionToken() {
+            return _selectionToken;
+        }
+
         boolean isAnimating() {
             return scrollAnimator != null && scrollAnimator.isRunning();
         }
@@ -683,11 +731,16 @@ public class TimelineView extends View {
             @Override
             public void onAnimationCancel(Animator animation) {
                 _waitForNextActionUp = true;
-                _selectedRunnable.run();
+                // No delivery here: ValueAnimator calls onAnimationEnd right
+                // after a cancel, and delivering in both places fired
+                // onTimeSelected twice for one gesture (two playFrom calls).
             }
             @Override
             public void onAnimationEnd(Animator animation) {
                 _isFlinging = false;
+                // Claim this gesture's selection before delivering it, so a
+                // still-posted ACTION_UP runnable cannot report it again.
+                _selectionToken++;
                 _selectedRunnable.run();
             }
         };

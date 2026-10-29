@@ -42,12 +42,13 @@ import com.limelight.binding.video.MediaCodecHelper;
  * do by itself:
  *
  * <ul>
- *   <li><b>Credentials.</b> {@code Camera.getRtsp()} carries its (rotated)
- *       MediaMTX credentials inline — {@code rtsp://user:pass@host/path} —
- *       which is what libVLC expected. The library instead wants them out of
- *       band (it sends the URL verbatim in every RTSP request, so userinfo
- *       there would just leak and not authenticate), so {@link #playUri} splits
- *       them off the URL.
+ *   <li><b>Opaque URL.</b> {@code Camera.getRtsp()} carries a per-camera signed
+ *       path token — {@code rtsp://host:port/<camera-id>/<exp>.<sig>} — which
+ *       is the whole credential: no {@code user:pass@} userinfo and no RTSP
+ *       {@code Authorization} header are involved. {@link #playUri} therefore
+ *       hands the URL to the library untouched. The token is short-lived and
+ *       specific to one camera; callers refresh it from the API before
+ *       connecting (see {@code CameraRefresher}).
  *   <li><b>Aspect ratio.</b> The decoder stretches the picture to whatever
  *       bounds it gets, so {@link #applyContentTransform()} fits it to the
  *       stream's own ratio in the content matrix — never by measuring the view
@@ -85,8 +86,9 @@ public class RtspPlayerView extends TextureView implements VideoTouchListener.Tr
          * The stream failed or ended on its own. Fired at most once per
          * {@link #playUri} and never for a stop this app asked for.
          *
-         * @param unauthorized the RTSP credentials were rejected (they rotate,
-         *                     so the caller can refetch the camera and retry).
+         * @param unauthorized the camera rejected the URL's signed path token —
+         *                     it expired, or it belongs to another camera. The
+         *                     caller can fetch a fresh URL and retry.
          */
         void onError(boolean unauthorized);
     }
@@ -147,10 +149,8 @@ public class RtspPlayerView extends TextureView implements VideoTouchListener.Tr
 
     private Listener listener = null;
 
-    /** Credential-free URL of the current stream, and its credentials. */
+    /** URL of the current stream, exactly as the API returned it. */
     private Uri uri = null;
-    private String username = null;
-    private String password = null;
 
     private boolean requestAudio = true;
     private int volumePercent = 100;
@@ -343,20 +343,17 @@ public class RtspPlayerView extends TextureView implements VideoTouchListener.Tr
     }
 
     /**
-     * Starts (or restarts) playback of {@code uri}, whose inline credentials —
-     * if any — are moved to the RTSP authentication headers.
+     * Starts (or restarts) playback of {@code uri}. The URL is opaque: its last
+     * path segment is a per-camera signed token, which is the whole credential.
+     * It is passed to the library exactly as the API returned it — no userinfo
+     * to strip and no authentication header to add.
      */
     public void playUri(Uri uri) {
-        String userInfo = uri.getUserInfo();
-        if (userInfo != null) {
-            int separator = userInfo.indexOf(':');
-            username = separator < 0 ? userInfo : userInfo.substring(0, separator);
-            password = separator < 0 ? null : userInfo.substring(separator + 1);
-            this.uri = uri.buildUpon().encodedAuthority(hostAndPort(uri)).build();
-        } else {
-            username = null;
-            password = null;
-            this.uri = uri;
+        this.uri = uri;
+
+        if (BuildConfig.DEBUG) {
+            // Never the full URL: the last path segment is a bearer credential.
+            Log.d(TAG, "playing " + RtspUrl.redact(uri.toString()));
         }
 
         // The decoder's geometry belongs to the session that is ending; until
@@ -446,7 +443,9 @@ public class RtspPlayerView extends TextureView implements VideoTouchListener.Tr
         // A session starts clean; by here the previous one has said goodbye.
         errorReported = false;
 
-        processor.init(uri, username, password, null, RtspProcessor.DEFAULT_SOCKET_TIMEOUT);
+        // No out-of-band credentials: the signed path token in the URL is the
+        // credential, and the library must send the URL verbatim.
+        processor.init(uri, null, null, null, RtspProcessor.DEFAULT_SOCKET_TIMEOUT);
         processor.setVolume(volumePercent / 100f);
         processor.start(true, requestAudio, false);
     }
@@ -457,12 +456,6 @@ public class RtspPlayerView extends TextureView implements VideoTouchListener.Tr
         }
         pendingGoodbyes++;
         processor.stop();
-    }
-
-    /** {@code host[:port]} of {@code uri}, i.e. its authority minus the credentials. */
-    private static String hostAndPort(Uri uri) {
-        String host = uri.getHost() == null ? "" : uri.getHost();
-        return uri.getPort() == -1 ? host : host + ":" + uri.getPort();
     }
 
     public void mute(boolean muted) {

@@ -118,6 +118,10 @@ public class Camera implements Serializable {
         @SerializedName("talk")
         private boolean talk;
 
+        @Expose
+        @SerializedName("settings")
+        private boolean settings;
+
         // Codecs the camera's backchannel actually accepts, probed from its SDP at
         // startup (e.g. ["aac", "g711"]). Used to negotiate the talk codec instead
         // of guessing. May be absent/empty if the probe hasn't finished or the
@@ -146,6 +150,10 @@ public class Camera implements Serializable {
             return talk;
         }
 
+        public boolean hasSettings() {
+            return settings;
+        }
+
         public List<String> getTalkCodecs() {
             return talkCodecs;
         }
@@ -169,6 +177,19 @@ public class Camera implements Serializable {
 
     public String getRtsp() {
         return rtsp;
+    }
+
+    /**
+     * Replaces the live RTSP URL in place. Used to apply a fresh signed path
+     * token obtained from {@code GET /api/cameras}, without swapping the whole
+     * object (the mosaic holds a reference per cell).
+     *
+     * <p>The server sends an empty string when it advertises no live feed for
+     * the camera (relay disabled, privacy on, or outside its recording
+     * schedule).
+     */
+    public void setRtsp(String rtsp) {
+        this.rtsp = rtsp;
     }
 
     public boolean hasPlayback() {
@@ -210,6 +231,11 @@ public class Camera implements Serializable {
     /** Whether the camera supports the two-way-audio (push-to-talk) backchannel. */
     public boolean hasTalk() {
         return capabilities != null && capabilities.hasTalk();
+    }
+
+    /** Whether the camera exposes its live settings (day/night, illuminators, motion, audio). */
+    public boolean hasSettings() {
+        return capabilities != null && capabilities.hasSettings();
     }
 
     /**

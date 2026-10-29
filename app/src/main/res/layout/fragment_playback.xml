@@ -67,6 +67,27 @@
                 android:textColor="@color/white"
                 android:textStyle="bold"
                 android:visibility="gone" />
+
+            <!-- The recording's video stalled while its audio kept going: there
+                 is nothing to show, but it is still a recording. -->
+            <TextView
+                android:id="@+id/no_video_overlay"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginStart="24dp"
+                android:layout_marginEnd="24dp"
+                android:background="@drawable/bg_speed_badge"
+                android:gravity="center"
+                android:maxWidth="320dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"
+                android:text="@string/playback_audio_only"
+                android:textColor="@color/white"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:visibility="gone" />
         </FrameLayout>
 
         <FrameLayout
