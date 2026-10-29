@@ -1,0 +1,9 @@
+# The build mounts the project at run time, so nothing needs to be sent in the
+# build context. Keep it minimal in case that changes.
+.git
+.gradle
+build
+app/build
+*.apk
+local.properties
+.gradle-docker

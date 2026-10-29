@@ -9,3 +9,6 @@
 .cxx
 local.properties
 /.gradle-docker
+
+# Local test recordings
+/*.mp4
