@@ -9,6 +9,7 @@ import java.io.IOException;
 import ar.com.delellis.eneverre.api.ApiService;
 import ar.com.delellis.eneverre.api.model.RefreshRequest;
 import ar.com.delellis.eneverre.api.model.RefreshResponse;
+import ar.com.delellis.eneverre.api.model.Role;
 import ar.com.delellis.eneverre.util.SecureStore;
 
 /**
@@ -34,6 +35,9 @@ public class SessionManager {
     private volatile String refreshToken;
     /** Unix expiry (seconds) of {@link #token}; 0 if unknown. */
     private volatile long accessExpiresAt;
+
+    /** Guards against two 403-driven role refreshes rotating the pair at once. */
+    private boolean roleRefreshInFlight = false;
 
     /**
      * Used to call {@code auth/refresh}. Set once via {@link #attach(ApiService)}
@@ -84,6 +88,21 @@ public class SessionManager {
     }
 
     /**
+     * Persists the effective role a refresh response carries. The server sends
+     * it best-effort, so a response without one leaves the cached role alone.
+     */
+    private static void applyRole(RefreshResponse body) {
+        String role = body.getRole();
+        if (role == null || role.isEmpty()) {
+            return;
+        }
+        SecureStore store = SecureStore.getInstance();
+        store.setRole(role);
+        Boolean admin = body.isAdmin();
+        store.setIsAdmin(admin != null ? admin : Role.isAdmin(role));
+    }
+
+    /**
      * Callback for {@link #refreshSessionIfExpiringSoon}: invoked on the main
      * thread once the session is ready to use (refreshed or not).
      */
@@ -102,7 +121,10 @@ public class SessionManager {
         String currentRefresh = refreshToken;
         long now = System.currentTimeMillis() / 1000L;
         boolean expiringSoon = token == null || accessExpiresAt <= now + REFRESH_THRESHOLD_SECONDS;
-        if (currentRefresh == null || !expiringSoon) {
+        // A session cached before roles existed only knows the old admin flag;
+        // refresh it so the real role replaces the guess.
+        boolean needRole = !SecureStore.getInstance().hasRole();
+        if (currentRefresh == null || (!expiringSoon && !needRole)) {
             callback.onReady();
             return;
         }
@@ -112,6 +134,7 @@ public class SessionManager {
                 if (resp.isSuccessful() && resp.body() != null) {
                     RefreshResponse body = resp.body();
                     setTokens(body.getToken(), body.getRefreshToken(), body.getExpiresAt());
+                    applyRole(body);
                 } else {
                     Log.w(TAG, "Proactive token refresh failed: HTTP " + resp.code());
                 }
@@ -162,6 +185,7 @@ public class SessionManager {
                 RefreshResponse body = resp.body();
                 // Persist the rotated pair so the next cold start can refresh too.
                 setTokens(body.getToken(), body.getRefreshToken(), body.getExpiresAt());
+                applyRole(body);
                 return body.getToken();
             }
             Log.w(TAG, "Token refresh failed: HTTP " + resp.code());
@@ -169,5 +193,43 @@ public class SessionManager {
             Log.w(TAG, "Token refresh failed", e);
         }
         return null;
+    }
+
+    /**
+     * Forces a token/role refresh after a {@code 403}: the cached role may be
+     * stale because an admin changed it mid-session. Like any refresh this
+     * rotates the pair; concurrent callers collapse into the running request.
+     *
+     * <p>Always calls back exactly once, on the main thread. Read the resulting
+     * role from {@code SecureStore} to repaint.
+     */
+    public void refreshRole(SessionCallback callback) {
+        String currentRefresh = refreshToken;
+        if (roleRefreshInFlight || currentRefresh == null) {
+            callback.onReady();
+            return;
+        }
+        roleRefreshInFlight = true;
+        apiService.refresh(new RefreshRequest(currentRefresh)).enqueue(new retrofit2.Callback<RefreshResponse>() {
+            @Override
+            public void onResponse(retrofit2.Call<RefreshResponse> call, retrofit2.Response<RefreshResponse> resp) {
+                roleRefreshInFlight = false;
+                if (resp.isSuccessful() && resp.body() != null) {
+                    RefreshResponse body = resp.body();
+                    setTokens(body.getToken(), body.getRefreshToken(), body.getExpiresAt());
+                    applyRole(body);
+                } else {
+                    Log.w(TAG, "Role refresh failed: HTTP " + resp.code());
+                }
+                callback.onReady();
+            }
+
+            @Override
+            public void onFailure(retrofit2.Call<RefreshResponse> call, Throwable t) {
+                roleRefreshInFlight = false;
+                Log.w(TAG, "Role refresh failed", t);
+                callback.onReady();
+            }
+        });
     }
 }

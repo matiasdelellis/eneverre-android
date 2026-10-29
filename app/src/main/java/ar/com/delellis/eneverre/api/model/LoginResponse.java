@@ -45,6 +45,16 @@ public class LoginResponse {
     @SerializedName("is_admin")
     private boolean isAdmin;
 
+    /**
+     * The account's fixed role ({@code admin}, {@code user}, {@code viewer} or
+     * {@code monitor}). Persisted so the returning session — which skips login —
+     * still knows which capabilities to offer. Absent on older servers, in which
+     * case the client falls back to {@link #isAdmin()}.
+     */
+    @Expose
+    @SerializedName("role")
+    private String role;
+
     public String getToken() {
         return token;
     }
@@ -67,5 +77,10 @@ public class LoginResponse {
 
     public boolean isAdmin() {
         return isAdmin;
+    }
+
+    /** The account's fixed role, or {@code null} on a server that predates roles. */
+    public String getRole() {
+        return role;
     }
 }

@@ -9,6 +9,8 @@ import androidx.security.crypto.MasterKeys;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 
+import ar.com.delellis.eneverre.api.model.Role;
+
 public class SecureStore {
     private static final String PREFERENCES = "EneverreSecureStore";
 
@@ -18,13 +20,17 @@ public class SecureStore {
     private static final String KEY_ACCESS_EXPIRES_AT = "eneverre_access_expires_at";
     private static final String KEY_MUST_CHANGE_PASSWORD = "eneverre_must_change_password";
     private static final String KEY_IS_ADMIN = "eneverre_is_admin";
+    private static final String KEY_ROLE = "eneverre_role";
 
     private static SecureStore instance;
 
+    /** Application context, exposed so session-wide reactions need no new plumbing. */
+    private final Context appContext;
     private final SharedPreferences prefs;
 
     private SecureStore(Context context) {
-        this.prefs = openEncrypted(context.getApplicationContext());
+        this.appContext = context.getApplicationContext();
+        this.prefs = openEncrypted(this.appContext);
     }
 
     private static SharedPreferences openEncrypted(Context context) {
@@ -75,15 +81,28 @@ public class SecureStore {
         return getConfigHost() != null && getRefreshToken() != null;
     }
 
-    /** Removes the stored host and token pair (e.g. on logout or a dead session). */
+    /** The application context this store was created with (never an Activity). */
+    public Context getAppContext() {
+        return appContext;
+    }
+
+    /**
+     * Removes the stored token pair and everything derived from the account
+     * (role, admin flag, mandatory password change).
+     *
+     * <p>The server address is configuration, not a credential, so it is kept:
+     * the login screen pre-fills it and signing out does not force the user to
+     * retype the URL. {@link #hasCredentials()} still reports {@code false}
+     * because the refresh token is gone. Call this on logout or a dead session.
+     */
     public void clearCredentials() {
         prefs.edit()
-                .remove(KEY_CONFIG_HOST)
                 .remove(KEY_ACCESS_TOKEN)
                 .remove(KEY_REFRESH_TOKEN)
                 .remove(KEY_ACCESS_EXPIRES_AT)
                 .remove(KEY_MUST_CHANGE_PASSWORD)
                 .remove(KEY_IS_ADMIN)
+                .remove(KEY_ROLE)
                 .apply();
     }
 
@@ -101,15 +120,60 @@ public class SecureStore {
     }
 
     /**
-     * Whether the logged-in account is an admin ({@code is_admin} on login).
-     * Persisted so the returning session — which skips login — can still gate
-     * admin-only UI (e.g. the user-administration screen) without a fresh login.
+     * The account's fixed role, or the legacy fallback for a session cached
+     * before roles were persisted: the old admin flag means {@code admin},
+     * anything else {@code user} (the only two roles the app understood then).
+     * Such a session is refreshed on the next start to replace the guess.
+     */
+    public String getRole() {
+        String role = prefs.getString(KEY_ROLE, null);
+        if (role != null) {
+            return role;
+        }
+        return prefs.getBoolean(KEY_IS_ADMIN, false) ? Role.ADMIN : Role.USER;
+    }
+
+    /** Whether a real role (not the legacy admin/user guess) has been cached. */
+    public boolean hasRole() {
+        return prefs.getString(KEY_ROLE, null) != null;
+    }
+
+    public void setRole(String role) {
+        prefs.edit().putString(KEY_ROLE, role).apply();
+    }
+
+    /**
+     * Whether the logged-in account is an admin. Persisted so the returning
+     * session — which skips login — can still gate admin-only UI (e.g. the
+     * user-administration screen) without a fresh login.
      */
     public boolean isAdmin() {
-        return prefs.getBoolean(KEY_IS_ADMIN, false);
+        return Role.isAdmin(getRole());
     }
+
+    /** Persists the server's admin flag; the role remains the source of truth. */
     public void setIsAdmin(boolean isAdmin) {
         prefs.edit().putBoolean(KEY_IS_ADMIN, isAdmin).apply();
+    }
+
+    /** Live and events: every role except {@code monitor}. */
+    public boolean canViewCameras() {
+        return Role.canViewCameras(getRole());
+    }
+
+    /** Recordings: {@code viewer} and {@code monitor} never get playback. */
+    public boolean canPlayback() {
+        return Role.canPlayback(getRole());
+    }
+
+    /** PTZ, privacy and talk: {@code viewer} and {@code monitor} cannot operate. */
+    public boolean canOperate() {
+        return Role.canOperate(getRole());
+    }
+
+    /** {@code monitor} accounts have no camera access at all. */
+    public boolean isMonitor() {
+        return Role.isMonitor(getRole());
     }
 
     public String getConfigHost() {

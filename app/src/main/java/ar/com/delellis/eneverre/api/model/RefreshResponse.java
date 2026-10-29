@@ -25,6 +25,20 @@ public class RefreshResponse {
     @SerializedName("refresh_expires_at")
     private long refreshExpiresAt;
 
+    /**
+     * The effective role and admin flag, sent so a client that caches them can
+     * notice a server-side role change without a fresh login. Best-effort: the
+     * server omits them if it could not resolve the account, so they may be
+     * absent — in which case the client keeps what it had.
+     */
+    @Expose
+    @SerializedName("role")
+    private String role;
+
+    @Expose
+    @SerializedName("is_admin")
+    private Boolean isAdmin;
+
     public String getToken() {
         return token;
     }
@@ -39,5 +53,15 @@ public class RefreshResponse {
 
     public long getRefreshExpiresAt() {
         return refreshExpiresAt;
+    }
+
+    /** The effective role, or {@code null} when the server omitted it. */
+    public String getRole() {
+        return role;
+    }
+
+    /** The effective admin flag, or {@code null} when the server omitted it. */
+    public Boolean isAdmin() {
+        return isAdmin;
     }
 }

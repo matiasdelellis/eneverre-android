@@ -13,8 +13,10 @@ import java.io.Serializable;
  * {@code UserEditActivity} as an intent extra.
  */
 public class User implements Serializable {
-    public static final String ROLE_ADMIN = "admin";
-    public static final String ROLE_USER = "user";
+    public static final String ROLE_ADMIN = Role.ADMIN;
+    public static final String ROLE_USER = Role.USER;
+    public static final String ROLE_VIEWER = Role.VIEWER;
+    public static final String ROLE_MONITOR = Role.MONITOR;
 
     @Expose
     @SerializedName("username")

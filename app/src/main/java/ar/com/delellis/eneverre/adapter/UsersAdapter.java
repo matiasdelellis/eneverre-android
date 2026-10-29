@@ -13,6 +13,7 @@ import java.util.List;
 
 import ar.com.delellis.eneverre.R;
 import ar.com.delellis.eneverre.api.model.User;
+import ar.com.delellis.eneverre.util.RoleLabels;
 
 /** Lists every account; tapping a row opens it for editing. */
 public class UsersAdapter extends RecyclerView.Adapter<UsersAdapter.UserViewHolder> {
@@ -43,9 +44,7 @@ public class UsersAdapter extends RecyclerView.Adapter<UsersAdapter.UserViewHold
 
         holder.name.setText(user.getUsername());
 
-        String role = context.getString(user.isAdmin()
-                ? R.string.user_role_admin
-                : R.string.user_role_user);
+        String role = context.getString(RoleLabels.labelRes(user.getRole()));
         String fullName = user.getFullName();
         holder.subtitle.setText(fullName.isEmpty()
                 ? role

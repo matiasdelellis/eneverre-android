@@ -9,6 +9,7 @@ import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
@@ -19,17 +20,24 @@ import androidx.appcompat.widget.Toolbar;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.checkbox.MaterialCheckBox;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import com.google.android.material.materialswitch.MaterialSwitch;
+import com.google.android.material.textfield.MaterialAutoCompleteTextView;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import ar.com.delellis.eneverre.api.ApiClient;
+import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.CreateUserRequest;
+import ar.com.delellis.eneverre.api.model.Role;
 import ar.com.delellis.eneverre.api.model.UpdateNameRequest;
 import ar.com.delellis.eneverre.api.model.UpdatePasswordRequest;
 import ar.com.delellis.eneverre.api.model.UpdateRoleRequest;
 import ar.com.delellis.eneverre.api.model.User;
+import ar.com.delellis.eneverre.api.model.UserCameras;
 import ar.com.delellis.eneverre.util.ApiCallback;
+import ar.com.delellis.eneverre.util.RoleLabels;
 
 /**
  * Create or edit a single account (admin only). Launched with no extra for a
@@ -54,11 +62,14 @@ public class UserEditActivity extends AppCompatActivity {
     private TextInputEditText passwordInput;
     private TextInputEditText firstNameInput;
     private TextInputEditText lastNameInput;
-    private MaterialSwitch roleAdminSwitch;
+    private MaterialAutoCompleteTextView roleInput;
+    /** Currently selected role; the dropdown shows its localized label. */
+    private String selectedRole = Role.USER;
     private MaterialCheckBox mustChangeCheck;
     private MaterialButton saveButton;
     private MaterialButton resetPasswordButton;
     private MaterialButton deleteButton;
+    private MaterialButton camerasButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,11 +105,14 @@ public class UserEditActivity extends AppCompatActivity {
         passwordInput = findViewById(R.id.password_input);
         firstNameInput = findViewById(R.id.first_name_input);
         lastNameInput = findViewById(R.id.last_name_input);
-        roleAdminSwitch = findViewById(R.id.role_admin_switch);
+        roleInput = findViewById(R.id.role_input);
         mustChangeCheck = findViewById(R.id.must_change_password_check);
         saveButton = findViewById(R.id.save_button);
         resetPasswordButton = findViewById(R.id.reset_password_button);
         deleteButton = findViewById(R.id.delete_button);
+        camerasButton = findViewById(R.id.user_cameras_button);
+
+        setupRoleInput();
 
         if (user == null) {
             bindCreateMode();
@@ -114,6 +128,10 @@ public class UserEditActivity extends AppCompatActivity {
         mustChangeCheck.setChecked(true);
         resetPasswordButton.setVisibility(GONE);
         deleteButton.setVisibility(GONE);
+        // A camera ACL only makes sense once the account exists (and is not an
+        // admin, who bypasses the ACL).
+        camerasButton.setVisibility(GONE);
+        setRole(Role.USER);
     }
 
     private void bindEditMode() {
@@ -128,12 +146,46 @@ public class UserEditActivity extends AppCompatActivity {
 
         firstNameInput.setText(user.getFirstName());
         lastNameInput.setText(user.getLastName());
-        roleAdminSwitch.setChecked(user.isAdmin());
+        setRole(user.getRole());
+
+        camerasButton.setOnClickListener(v -> showCameraAclDialog());
+        updateCamerasButtonVisibility();
 
         resetPasswordButton.setVisibility(VISIBLE);
         resetPasswordButton.setOnClickListener(v -> showResetPasswordDialog());
         deleteButton.setVisibility(VISIBLE);
         deleteButton.setOnClickListener(v -> confirmDelete());
+    }
+
+    /** Fills the role dropdown with the four fixed roles. */
+    private void setupRoleInput() {
+        String[] labels = new String[Role.ALL.length];
+        for (int i = 0; i < Role.ALL.length; i++) {
+            labels[i] = getString(RoleLabels.labelRes(Role.ALL[i]));
+        }
+        roleInput.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, labels));
+        roleInput.setOnItemClickListener((parent, view, position, id) -> {
+            selectedRole = Role.ALL[position];
+            updateCamerasButtonVisibility();
+        });
+    }
+
+    /**
+     * Selects a role in the dropdown. A server that predates roles only reports
+     * the admin flag, so fall back to it rather than silently demoting an admin.
+     */
+    private void setRole(@Nullable String role) {
+        if (role == null) {
+            role = user != null && user.isAdmin() ? Role.ADMIN : Role.USER;
+        }
+        selectedRole = role;
+        roleInput.setText(getString(RoleLabels.labelRes(role)), false);
+    }
+
+    /** The ACL only applies to non-admin accounts: admin bypasses it. */
+    private void updateCamerasButtonVisibility() {
+        boolean show = user != null && !Role.isAdmin(selectedRole);
+        camerasButton.setVisibility(show ? VISIBLE : GONE);
     }
 
     private void onSave() {
@@ -195,7 +247,7 @@ public class UserEditActivity extends AppCompatActivity {
     private void saveEdits() {
         boolean nameChanged = !equalsNorm(user.getFirstName(), text(firstNameInput))
                 || !equalsNorm(user.getLastName(), text(lastNameInput));
-        boolean roleChanged = user.isAdmin() != roleAdminSwitch.isChecked();
+        boolean roleChanged = !TextUtils.equals(user.getRole(), selectedRole);
 
         if (!nameChanged && !roleChanged) {
             finish();
@@ -321,6 +373,109 @@ public class UserEditActivity extends AppCompatActivity {
         });
     }
 
+    // --- Camera ACL -----------------------------------------------------------
+
+    /**
+     * Loads the account's ACL and the camera list, then offers a multi-choice
+     * dialog. "Save" restricts the account to the checked cameras; "All cameras"
+     * removes the restriction (so a camera added later is included
+     * automatically).
+     */
+    private void showCameraAclDialog() {
+        camerasButton.setEnabled(false);
+        ApiClient.getApiService().userCameras(user.getUsername())
+                .enqueue(new ApiCallback<UserCameras>(this) {
+                    @Override
+                    public void onSuccess(UserCameras body) {
+                        if (body == null) {
+                            camerasButton.setEnabled(true);
+                            Toast.makeText(UserEditActivity.this,
+                                    R.string.error_user_cameras, Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        loadCamerasForAcl(body);
+                    }
+
+                    @Override
+                    public void onError(int httpCode, String message) {
+                        camerasButton.setEnabled(true);
+                        Toast.makeText(UserEditActivity.this,
+                                R.string.error_user_cameras, Toast.LENGTH_LONG).show();
+                    }
+                });
+    }
+
+    private void loadCamerasForAcl(UserCameras acl) {
+        ApiClient.getApiService().cameras().enqueue(new ApiCallback<List<Camera>>(this) {
+            @Override
+            public void onSuccess(List<Camera> cameras) {
+                camerasButton.setEnabled(true);
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                showAclDialog(acl, cameras != null ? cameras : new ArrayList<>());
+            }
+
+            @Override
+            public void onError(int httpCode, String message) {
+                camerasButton.setEnabled(true);
+                Toast.makeText(UserEditActivity.this,
+                        R.string.error_user_cameras, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void showAclDialog(UserCameras acl, List<Camera> cameras) {
+        // Deliberately no setMessage(): AppCompat gives the message and the
+        // multi-choice list the same content panel, and with both set the list
+        // renders empty. The buttons below are self-explanatory.
+        String[] labels = new String[cameras.size()];
+        boolean[] checked = new boolean[cameras.size()];
+        List<String> allowed = acl.getCameraIds();
+        for (int i = 0; i < cameras.size(); i++) {
+            Camera camera = cameras.get(i);
+            labels[i] = camera.getName();
+            // An unrestricted account may use every camera.
+            checked[i] = !acl.isRestricted() || allowed.contains(camera.getId());
+        }
+
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.user_cameras)
+                .setMultiChoiceItems(labels, checked,
+                        (dialog, which, isChecked) -> checked[which] = isChecked)
+                .setPositiveButton(R.string.save, (dialog, which) -> {
+                    List<String> ids = new ArrayList<>();
+                    for (int i = 0; i < cameras.size(); i++) {
+                        if (checked[i]) {
+                            ids.add(cameras.get(i).getId());
+                        }
+                    }
+                    saveAcl(true, ids);
+                })
+                .setNeutralButton(R.string.user_cameras_all,
+                        (dialog, which) -> saveAcl(false, null))
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    private void saveAcl(boolean restricted, @Nullable List<String> cameraIds) {
+        UserCameras request = new UserCameras(restricted, cameraIds);
+        ApiClient.getApiService().setUserCameras(user.getUsername(), request)
+                .enqueue(new ApiCallback<UserCameras>(this) {
+                    @Override
+                    public void onSuccess(UserCameras body) {
+                        Toast.makeText(UserEditActivity.this,
+                                R.string.user_cameras_saved, Toast.LENGTH_SHORT).show();
+                    }
+
+                    @Override
+                    public void onError(int httpCode, String message) {
+                        Toast.makeText(UserEditActivity.this,
+                                R.string.error_save_user_cameras, Toast.LENGTH_LONG).show();
+                    }
+                });
+    }
+
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == android.R.id.home) {
@@ -333,7 +488,7 @@ public class UserEditActivity extends AppCompatActivity {
     // --- helpers --------------------------------------------------------------
 
     private String role() {
-        return roleAdminSwitch.isChecked() ? User.ROLE_ADMIN : User.ROLE_USER;
+        return selectedRole;
     }
 
     private static String text(TextInputEditText input) {
