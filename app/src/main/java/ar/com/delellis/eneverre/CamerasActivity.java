@@ -21,6 +21,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import ar.com.delellis.eneverre.adapter.LocationsAdapter;
 import ar.com.delellis.eneverre.adapter.OnCameraClickListener;
@@ -211,7 +212,7 @@ public class CamerasActivity extends AppCompatActivity
         // before authorizing, instead of asking the user to type the code.
         String pendingUserCode = intent.getStringExtra(EXTRA_PENDING_USER_CODE);
         if (pendingUserCode != null && !pendingUserCode.isEmpty()) {
-            DeviceLinker.confirm(this, pendingUserCode.toUpperCase());
+            DeviceLinker.confirm(this, pendingUserCode.toUpperCase(Locale.ROOT));
         }
 
         // Fire the auto-update check from the first long-lived activity on

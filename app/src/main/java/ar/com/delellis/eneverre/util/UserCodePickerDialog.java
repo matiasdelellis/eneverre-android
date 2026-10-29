@@ -16,6 +16,8 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
+import java.util.Locale;
+
 import ar.com.delellis.eneverre.R;
 
 public class UserCodePickerDialog {
@@ -126,7 +128,7 @@ public class UserCodePickerDialog {
                             return;
                         }
 
-                        code.append(value.toUpperCase());
+                        code.append(value.toUpperCase(Locale.ROOT));
                     }
 
                     if (code.length() < 6) {

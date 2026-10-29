@@ -24,6 +24,7 @@ import java.io.Serializable;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.List;
+import java.util.Locale;
 
 import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.model.Camera;
@@ -285,7 +286,8 @@ public class LoginActivity extends AppCompatActivity {
         String model = Build.MODEL == null ? "" : Build.MODEL.trim();
         // Many devices already prefix the model with the manufacturer ("Pixel 8"
         // vs "samsung SM-G991B"); avoid doubling it when so.
-        if (!model.isEmpty() && model.toLowerCase().startsWith(manufacturer.toLowerCase())) {
+        if (!model.isEmpty() && model.toLowerCase(Locale.ROOT)
+                .startsWith(manufacturer.toLowerCase(Locale.ROOT))) {
             return capitalize(model);
         }
         String name = (capitalize(manufacturer) + " " + model).trim();
