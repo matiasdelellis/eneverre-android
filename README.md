@@ -4,9 +4,16 @@ This is an Android client for [eneverre-server](https://github.com/matiasdelelli
 These projects just attempt to consolidate the streams from different manufacturers into a single application.
 
 ### Features 🎉
+* **Live views:** one camera at a time or a live mosaic of a whole location, paged between locations.
+* **PTZ, privacy mode, two-way audio (push-to-talk), snapshots and clip downloads.**
+* **Recording playback:** HLS playback with a timeline, jump-to-time and clip export (user/admin only).
+* **Roles & camera ACL:** `admin`, `user`, `viewer` (live only) and `monitor` (status only), with server-enforced per-user camera access. See [docs/ROLES-ACL.md](docs/ROLES-ACL.md).
+* **Camera live settings (admin):** day/night, illuminators, audio, motion detection, and the PTZ home/privacy positions.
+* **Optional biometric app lock:** fingerprint, face or device PIN when the app returns.
 * **Manufacturer independence:** See [eneverre-server](https://github.com/matiasdelellis/eneverre-server) for details.
 * **PTZ support:** Maybe, for now only from [Thingino](https://thingino.com/).
 * **Privacy Mode:** It's a bit of a lie if you don't use Thingino cameras. With others, this app hides the image, but the camera still transmits Video and Audio.
+* **Self-hosted and auto-updating:** branded builds can bake in the server address and publish updates through it.
 
 ### Screenshots 😍
 Login | Cameras View | Pip Camera | PTZ Camera | Private Camera | Playback

@@ -17,61 +17,27 @@ to a user and inherits exactly that role and ACL.
 
 ## Android phone app (`eneverre-android`)
 
-### Current state
+### Status: implemented in 0.9.0
 
-- `LoginResponse` carries `role` and `is_admin`; `SecureStore` currently keeps
-  only `is_admin`. `POST /api/auth/refresh` now also returns the effective
-  `role`/`is_admin`, so the cached role can be updated on renewal.
-- `SecureStore.isAdmin()` gates the admin menus (`CamerasActivity` and the
-  settings button), but there is no viewer/monitor gating.
-- `ViewActivity` always offers the Playback tab; `LiveViewFragment` always
-  offers PTZ, privacy and talk when the camera advertises the capability.
-- The camera list is already server-filtered; the app caches `Camera` objects
-  in `Locations` and the current `Location` intent extras.
-- User management (`UsersActivity` / `UserEditActivity`) only understands
-  admin vs user.
+The client now applies the model above:
 
-### Required changes
+- `SecureStore` persists the real `role` next to `is_admin`; login and every
+  refresh store it, and `Role`/`SecureStore` expose `canViewCameras()`,
+  `canPlayback()`, `canOperate()` and `isMonitor()`.
+- `viewer`: live and events only; the Playback tab, PTZ, privacy and talk are
+  hidden.
+- `monitor`: lands on the status-only `MonitorActivity`; it never fetches the
+  camera list.
+- A `403` re-reads the role (`ApiClient.refreshRole`) and repaints the screen;
+  a `403` is never treated as a dead session.
+- The camera list is authoritative after every refresh; a `404` from a
+  single-camera endpoint confirms the camera against a fresh list and closes
+  the view if it is gone.
+- Admin user management knows all four roles and edits the per-user camera ACL
+  through `GET/PUT /api/users/{username}/cameras` ("all cameras" sends
+  `{"restricted":false}`).
 
-1. **Persist the real role.**
-   - Add `role` to `SecureStore` (alongside `is_admin`), set it from
-     `LoginResponse.getRole()` and from every refresh response, and clear it
-     on logout.
-   - Add helpers such as `canPlayback()`, `canOperate()` and `canMonitor()`
-     instead of checking only `isAdmin()`.
-   - A role can change server-side mid-session. On a `403` whose detail says
-     the capability is missing, refresh the session/role (logout → login is an
-     acceptable fallback) and repaint; do not leave the forbidden control
-     visible.
-
-2. **Gate the UI.**
-   - `viewer`: hide the Playback tab, every playback control, PTZ, privacy and
-     talk. Live and events remain.
-   - `monitor`: do not enter the camera wall; show a status-only screen or a
-     clear "use the API/metrics" message. Monitor users are intended for
-     integrations, not the phone UI.
-   - `user`/`admin`: current behavior.
-   - Admin menus stay `isAdmin()`-only.
-
-3. **Handle ACL-filtered data.**
-   - Treat `/api/cameras` as authoritative after every refresh; remove cached
-     cameras that disappeared.
-   - On `404` from a single-camera endpoint, drop that camera from the current
-     `Location`/pager and reload the list instead of retrying forever.
-   - When an admin changes a user's ACL, that user's app sees the new list on
-     its next refresh; no client-side ACL logic is needed beyond refreshing.
-
-4. **Admin user management.**
-   - Add `viewer` and `monitor` to the role selector
-     (`UserEditActivity`/`UsersAdapter`); the server rejects unknown roles.
-   - Add a camera-ACL editor that calls:
-     ```http
-     GET /api/users/{username}/cameras
-     PUT /api/users/{username}/cameras
-     {"restricted":true,"camera_ids":["front","garden"]}
-     ```
-     An empty list means no cameras; `{"restricted":false}` restores all.
-   - Remember: viewer has no playback, monitor has no camera access at all.
+The Android TV notes below are unchanged.
 
 ## Android TV app (`eneverre-tv`)
 
