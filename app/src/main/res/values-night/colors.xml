@@ -2,4 +2,9 @@
 <resources>
     <!-- Lighter brand blue, so the logo and the title keep enough contrast on dark surfaces. -->
     <color name="brand_primary">#4FB3E8</color>
+    <!-- Dark text/icons on the lighter brand blue. -->
+    <color name="brand_on_primary">#FF00202E</color>
+    <!-- Dark brand tint for containers on dark surfaces. -->
+    <color name="brand_container">#FF004A6B</color>
+    <color name="brand_on_container">#FFC7E7FF</color>
 </resources>

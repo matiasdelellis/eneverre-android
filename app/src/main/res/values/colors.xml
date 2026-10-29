@@ -4,4 +4,9 @@
     <color name="white">#FFFFFFFF</color>
     <color name="record_red">#E91E63</color>
     <color name="brand_primary">#0082C9</color>
+    <!-- Text/icon colour on top of brand_primary (same as the launcher icon). -->
+    <color name="brand_on_primary">#FFFFFFFF</color>
+    <!-- Light brand tint for containers (FABs, the selected tab, switches). -->
+    <color name="brand_container">#FFCFE7F7</color>
+    <color name="brand_on_container">#FF001E2F</color>
 </resources>

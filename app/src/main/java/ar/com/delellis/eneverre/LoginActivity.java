@@ -4,25 +4,21 @@ import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 
 import android.content.Intent;
-import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
-import android.text.method.HideReturnsTransformationMethod;
-import android.text.method.PasswordTransformationMethod;
 import android.util.Log;
-import android.view.MotionEvent;
-import android.view.autofill.AutofillManager;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.ProgressBar;
-import android.widget.Toast;
-
 import android.view.View;
+import android.view.autofill.AutofillManager;
+import android.widget.EditText;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.textfield.TextInputLayout;
 
 import java.io.Serializable;
 import java.net.MalformedURLException;
@@ -33,18 +29,25 @@ import ar.com.delellis.eneverre.api.ApiClient;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.api.model.LoginRequest;
 import ar.com.delellis.eneverre.api.model.LoginResponse;
+import ar.com.delellis.eneverre.api.model.Role;
 import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.ApiError;
+import ar.com.delellis.eneverre.util.AppLock;
 import ar.com.delellis.eneverre.util.SecureStore;
 
 public class LoginActivity extends AppCompatActivity {
     private static final String TAG = "LoginActivity";
 
+    private TextInputLayout serverLayout = null;
+    private TextInputLayout usernameLayout = null;
+    private TextInputLayout passwordLayout = null;
+
     private EditText hostText = null;
     private EditText usernameText = null;
     private EditText passwordText = null;
-    private ProgressBar progressBar = null;
-    private Button logingButton = null;
+
+    private View progressBar = null;
+    private MaterialButton logingButton = null;
 
     SecureStore secureStore = null;
 
@@ -66,36 +69,25 @@ public class LoginActivity extends AppCompatActivity {
 
         secureStore = SecureStore.getInstance(this);
 
-        hostText = (EditText) findViewById(R.id.editServer);
+        serverLayout = findViewById(R.id.server_layout);
+        usernameLayout = findViewById(R.id.username_layout);
+        passwordLayout = findViewById(R.id.password_layout);
+
+        hostText = findViewById(R.id.editServer);
         if (!BuildConfig.API_HOST.isEmpty()) {
             hostText.setText(BuildConfig.API_HOST);
-            hostText.setVisibility(GONE);
+            serverLayout.setVisibility(GONE);
         } else {
             hostText.setText(secureStore.getConfigHost());
         }
 
-        usernameText = (EditText) findViewById(R.id.editUsername);
-        passwordText = (EditText) findViewById(R.id.editPassword);
-        passwordText.setOnTouchListener((v, event) -> {
-            if (event.getAction() != MotionEvent.ACTION_UP) {
-                return false;
-            }
-            Drawable end = passwordText.getCompoundDrawablesRelative()[2];
-            if (end == null) {
-                return false;
-            }
-            int touchSlop = (int) (24 * v.getResources().getDisplayMetrics().density);
-            if (event.getRawX() < passwordText.getRight() - passwordText.getPaddingEnd() - touchSlop) {
-                return false;
-            }
-            togglePasswordVisibility();
-            return true;
-        });
+        usernameText = findViewById(R.id.editUsername);
+        passwordText = findViewById(R.id.editPassword);
 
-        progressBar = (ProgressBar) findViewById(R.id.loginProgressBar);
+        progressBar = findViewById(R.id.loginProgressBar);
         progressBar.setVisibility(GONE);
 
-        logingButton = (Button) findViewById(R.id.buttonLogin);
+        logingButton = findViewById(R.id.buttonLogin);
         logingButton.setOnClickListener(view -> {
             String host, username, password;
 
@@ -110,23 +102,27 @@ public class LoginActivity extends AppCompatActivity {
         });
     }
     private boolean validate_credentials(String host, String username, String password) {
+        serverLayout.setError(null);
+        usernameLayout.setError(null);
+        passwordLayout.setError(null);
+
         if (host.isEmpty()) {
-            hostText.setError(getString(R.string.required_configuration));
+            serverLayout.setError(getString(R.string.required_configuration));
             return false;
         }
         if (username.isEmpty()) {
-            usernameText.setError(getString(R.string.required_configuration));
+            usernameLayout.setError(getString(R.string.required_configuration));
             return false;
         }
         if (password.isEmpty()) {
-            passwordText.setError(getString(R.string.required_configuration));
+            passwordLayout.setError(getString(R.string.required_configuration));
             return false;
         }
 
         try {
             new URL(host);
         } catch (MalformedURLException e) {
-            hostText.setError(e.getLocalizedMessage());
+            serverLayout.setError(e.getLocalizedMessage());
             return false;
         }
 
@@ -163,8 +159,23 @@ public class LoginActivity extends AppCompatActivity {
                 // Persisted unconditionally for the same reason: a clean login must
                 // overwrite any stale admin flag from a prior session on this device.
                 secureStore.setIsAdmin(response.isAdmin());
+                if (response.getRole() != null) {
+                    // The role decides which capabilities to offer (playback,
+                    // PTZ/privacy/talk, or a status-only monitor screen).
+                    secureStore.setRole(response.getRole());
+                }
+                // A successful login is proof of identity: don't ask for the
+                // biometric unlock on top of it.
+                AppLock.getInstance().unlock();
                 if (response.isMustChangePassword()) {
                     startActivity(new Intent(LoginActivity.this, ChangePasswordActivity.class));
+                    finish();
+                    return;
+                }
+                if (Role.isMonitor(response.getRole())) {
+                    // A monitor account has no camera access at all: /api/cameras
+                    // would answer 403, so go straight to the status screen.
+                    startActivity(new Intent(LoginActivity.this, MonitorActivity.class));
                     finish();
                     return;
                 }
@@ -220,6 +231,11 @@ public class LoginActivity extends AppCompatActivity {
      * suggests one on a later login.
      */
     private void commitAutofill() {
+        // AutofillManager itself is API 26+ (the helper below returns null on
+        // older devices, but lint needs the guard here at the call site).
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return;
+        }
         AutofillManager autofill = autofillManager();
         if (autofill != null) {
             autofill.commit();
@@ -228,6 +244,9 @@ public class LoginActivity extends AppCompatActivity {
 
     /** Ends the autofill session as a failure, discarding what the user typed. */
     private void cancelAutofill() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return;
+        }
         AutofillManager autofill = autofillManager();
         if (autofill != null) {
             autofill.cancel();
@@ -255,17 +274,6 @@ public class LoginActivity extends AppCompatActivity {
         Log.i(TAG, "Autofill: enabled=" + autofill.isEnabled()
                 + " supported=" + autofill.isAutofillSupported());
         return autofill;
-    }
-
-    private void togglePasswordVisibility() {
-        boolean showing = passwordText.getTransformationMethod() instanceof PasswordTransformationMethod;
-        int endDrawable = showing ? R.drawable.ic_visibility_off_24 : R.drawable.ic_visibility_24;
-        passwordText.setTransformationMethod(showing
-                ? HideReturnsTransformationMethod.getInstance()
-                : PasswordTransformationMethod.getInstance());
-        passwordText.setCompoundDrawablesRelativeWithIntrinsicBounds(
-                R.drawable.ic_lock_24, 0, endDrawable, 0);
-        passwordText.setSelection(passwordText.getText().length());
     }
 
     /**

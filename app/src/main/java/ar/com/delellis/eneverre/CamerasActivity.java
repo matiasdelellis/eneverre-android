@@ -7,6 +7,7 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -18,8 +19,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,6 +26,7 @@ import ar.com.delellis.eneverre.adapter.LocationsAdapter;
 import ar.com.delellis.eneverre.adapter.OnCameraClickListener;
 import ar.com.delellis.eneverre.adapter.OnLocationClickListener;
 import ar.com.delellis.eneverre.api.ApiClient;
+import ar.com.delellis.eneverre.api.CameraRefresher;
 import ar.com.delellis.eneverre.api.model.Camera;
 import ar.com.delellis.eneverre.model.Cameras;
 import ar.com.delellis.eneverre.model.Location;
@@ -35,9 +35,6 @@ import ar.com.delellis.eneverre.util.ApiCallback;
 import ar.com.delellis.eneverre.util.DeviceLinker;
 import ar.com.delellis.eneverre.util.SecureStore;
 import ar.com.delellis.eneverre.util.UpdateChecker;
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
 
 public class CamerasActivity extends AppCompatActivity
         implements OnCameraClickListener, OnLocationClickListener {
@@ -50,6 +47,14 @@ public class CamerasActivity extends AppCompatActivity
     public static final String SELECTED_LOCATION_DATA = "SELECTED_LOCATION";
 
     public static final String SELECTED_CAMERA_DATA = "SELECTED_CAMERA";
+
+    /**
+     * Result from {@link ViewActivity} when the open camera is no longer
+     * accessible — it left this account's ACL, or an admin deleted it. The
+     * camera list is authoritative, so this triggers a reload instead of leaving
+     * a dead entry on screen.
+     */
+    public static final int RESULT_CAMERA_GONE = RESULT_FIRST_USER;
 
     /** A device user code to confirm and authorize, delivered from a link. */
     public static final String EXTRA_PENDING_USER_CODE = "PENDING_USER_CODE";
@@ -65,6 +70,11 @@ public class CamerasActivity extends AppCompatActivity
     private final ActivityResultLauncher<Intent> liveViewLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
+                if (result.getResultCode() == RESULT_CAMERA_GONE) {
+                    // The camera is no longer ours to show: reload the list.
+                    refreshCameras();
+                    return;
+                }
                 if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                     Location location = (Location) result.getData().getSerializableExtra(LOCATION_CAMERAS_DATA);
                     applyCameraChanges(location);
@@ -99,7 +109,11 @@ public class CamerasActivity extends AppCompatActivity
      * so a blank/absent server response can't crash {@link Locations}.
      */
     private void showCameras(List<Camera> cameraList) {
-        if (cameraList == null) {
+        if (cameraList != null) {
+            // The list that just arrived carries fresh signed RTSP path tokens:
+            // remember when, so a live view knows how long its URL may be reused.
+            CameraRefresher.markFresh();
+        } else {
             cameraList = new ArrayList<>();
         }
         locations = new Locations(cameraList);
@@ -122,6 +136,23 @@ public class CamerasActivity extends AppCompatActivity
             @Override
             public void onError(int httpCode, String message) {
                 swipeRefresh.setRefreshing(false);
+                if (httpCode == 403) {
+                    // The role may have changed mid-session: a monitor account has
+                    // no camera access at all, so re-read the role and, if that is
+                    // what happened, move to the status-only screen.
+                    ApiClient.getInstance().refreshRole(() -> {
+                        if (isFinishing() || isDestroyed()) {
+                            return;
+                        }
+                        if (SecureStore.getInstance(CamerasActivity.this).isMonitor()) {
+                            startActivity(new Intent(CamerasActivity.this, MonitorActivity.class));
+                            finish();
+                        } else {
+                            Toast.makeText(CamerasActivity.this, message, Toast.LENGTH_LONG).show();
+                        }
+                    });
+                    return;
+                }
                 super.onError(httpCode, message);
             }
         });
@@ -137,6 +168,14 @@ public class CamerasActivity extends AppCompatActivity
             ApiClient.getInstance();
         } catch (IllegalStateException e) {
             startActivity(new Intent(this, SplashActivity.class));
+            finish();
+            return;
+        }
+
+        // Defensive: a monitor account has no camera list. Login/Splash route it
+        // here already, but a role change or a stale task could land us here.
+        if (SecureStore.getInstance(this).isMonitor()) {
+            startActivity(new Intent(this, MonitorActivity.class));
             finish();
             return;
         }
@@ -186,60 +225,16 @@ public class CamerasActivity extends AppCompatActivity
     public boolean onCreateOptionsMenu(Menu menu) {
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.cameras_top_app_bar, menu);
-        // User administration is admin-only (also enforced server-side). The flag
-        // was persisted at login; a session predating this feature stays hidden
-        // until the next login, which is acceptable.
-        menu.findItem(R.id.users).setVisible(SecureStore.getInstance().isAdmin());
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        int itemId = item.getItemId();
-        if (itemId == R.id.about) {
-            startActivity(new Intent(this, AboutActivity.class));
-            return true;
-        }
-        else if (itemId == R.id.users) {
-            startActivity(new Intent(this, UsersActivity.class));
-            return true;
-        }
-        else if (itemId == R.id.sessions) {
-            startActivity(new Intent(this, SessionsActivity.class));
-            return true;
-        }
-        else if (itemId == R.id.logout) {
-            confirmLogout();
+        if (item.getItemId() == R.id.settings) {
+            startActivity(new Intent(this, SettingsActivity.class));
             return true;
         }
         return super.onOptionsItemSelected(item);
-    }
-
-    private void confirmLogout() {
-        new MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.logout_confirm_title)
-                .setMessage(R.string.logout_confirm_message)
-                .setNegativeButton(R.string.cancel, null)
-                .setPositiveButton(R.string.logout, (dialog, which) -> performLogout())
-                .show();
-    }
-
-    private void performLogout() {
-        // Best-effort server-side revocation of the current token; don't block
-        // the UI on it (if offline the token simply lapses at its 30-day TTL).
-        ApiClient.getApiService().logout().enqueue(new Callback<Void>() {
-            @Override
-            public void onResponse(Call<Void> call, Response<Void> response) { }
-            @Override
-            public void onFailure(Call<Void> call, Throwable t) { }
-        });
-
-        SecureStore.getInstance(this).clearCredentials();
-
-        Intent intent = new Intent(this, LoginActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        startActivity(intent);
-        finish();
     }
 
     @Override

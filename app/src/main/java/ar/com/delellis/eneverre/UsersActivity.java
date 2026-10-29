@@ -6,16 +6,17 @@ import static android.view.View.VISIBLE;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.MenuItem;
-import android.widget.ProgressBar;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.RecyclerView;
-
-import com.google.android.material.button.MaterialButton;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,7 +41,7 @@ public class UsersActivity extends AppCompatActivity implements UsersAdapter.OnU
 
     private RecyclerView list;
     private TextView emptyView;
-    private ProgressBar progressBar;
+    private View progressBar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,9 +73,32 @@ public class UsersActivity extends AppCompatActivity implements UsersAdapter.OnU
         adapter = new UsersAdapter(this, users, this);
         list.setAdapter(adapter);
 
-        MaterialButton addUserButton = findViewById(R.id.add_user_button);
-        addUserButton.setOnClickListener(v ->
+        findViewById(R.id.add_user_button).setOnClickListener(v ->
                 startActivity(new Intent(this, UserEditActivity.class)));
+
+        applyBottomInsets();
+    }
+
+    /**
+     * The FAB and the list's last row must stay above the system navigation bar:
+     * with targetSdk 35 the app draws edge-to-edge, so add the bottom inset to
+     * both (the layout's values are the no-inset minimums).
+     */
+    private void applyBottomInsets() {
+        View fab = findViewById(R.id.add_user_button);
+        ViewCompat.setOnApplyWindowInsetsListener(list, (view, insets) -> {
+            int bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
+            view.setPadding(view.getPaddingLeft(), view.getPaddingTop(),
+                    view.getPaddingRight(), dp(88) + bottom);
+            ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) fab.getLayoutParams();
+            params.bottomMargin = dp(16) + bottom;
+            fab.setLayoutParams(params);
+            return insets;
+        });
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     @Override
