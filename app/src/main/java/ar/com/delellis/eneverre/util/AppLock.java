@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
@@ -185,6 +186,13 @@ public final class AppLock implements Application.ActivityLifecycleCallbacks {
 
     @Override
     public void onActivityResumed(Activity activity) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // With the lock on, do not leave the last camera frame in the
+            // recents thumbnail. API 33+ can hide only the snapshot; below it
+            // the alternative (FLAG_SECURE) would also block screenshots.
+            activity.setRecentsScreenshotEnabled(
+                    !AppPreferences.getInstance(appContext).isAppLockEnabled());
+        }
     }
 
     @Override
